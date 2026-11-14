@@ -68,7 +68,7 @@ def inject_global_data():
     conn = database.get_db()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM materials WHERE stock <= min_stock")
+        cursor.execute("SELECT COUNT(*) FROM materials WHERE is_active = 1 AND stock <= min_stock")
         critical_count = cursor.fetchone()[0]
     except Exception:
         critical_count = 0
@@ -90,12 +90,12 @@ def dashboard():
     conn = database.get_db()
     cursor = conn.cursor()
 
-    # KPI 1: Total SKUs
-    cursor.execute("SELECT COUNT(*) FROM materials")
+    # KPI 1: Total SKUs (hanya material aktif, arsip tidak dihitung)
+    cursor.execute("SELECT COUNT(*) FROM materials WHERE is_active = 1")
     total_sku = cursor.fetchone()[0]
 
     # KPI 2: Total Nilai Aset Gudang (Rp)
-    cursor.execute("SELECT SUM(stock * unit_price) FROM materials")
+    cursor.execute("SELECT SUM(stock * unit_price) FROM materials WHERE is_active = 1")
     total_asset_val = cursor.fetchone()[0] or 0
 
     # KPI 3: Total Transaksi Hari Ini
@@ -108,10 +108,10 @@ def dashboard():
     today_transactions = cursor.fetchone()[0]
 
     # KPI 4: Stok Kritis / Menipis (<= min_stock)
-    cursor.execute("SELECT COUNT(*) FROM materials WHERE stock <= min_stock")
+    cursor.execute("SELECT COUNT(*) FROM materials WHERE is_active = 1 AND stock <= min_stock")
     total_critical = cursor.fetchone()[0]
 
-    cursor.execute("SELECT * FROM materials WHERE stock <= min_stock ORDER BY (stock / (min_stock + 0.001)) ASC LIMIT 6")
+    cursor.execute("SELECT * FROM materials WHERE is_active = 1 AND stock <= min_stock ORDER BY (stock / (min_stock + 0.001)) ASC LIMIT 6")
     critical_items = [dict(row) for row in cursor.fetchall()]
 
     # Recent Transactions
@@ -127,6 +127,7 @@ def dashboard():
     cursor.execute("""
         SELECT category, COUNT(*) as item_count, SUM(stock) as total_qty, SUM(stock * unit_price) as category_val
         FROM materials
+        WHERE is_active = 1
         GROUP BY category
         ORDER BY category_val DESC
     """)
@@ -159,7 +160,7 @@ def quick_transaction():
     suppliers = [dict(row) for row in cursor.fetchall()]
 
     # Frequently used materials for instant quick buttons
-    cursor.execute("SELECT * FROM materials ORDER BY stock DESC LIMIT 12")
+    cursor.execute("SELECT * FROM materials WHERE is_active = 1 ORDER BY stock DESC LIMIT 12")
     popular_materials = [dict(row) for row in cursor.fetchall()]
 
     conn.close()
@@ -183,6 +184,12 @@ def inventory():
     query = "SELECT * FROM materials WHERE 1=1"
     params = []
 
+    # Material yang diarsipkan hanya tampil saat filter "archived" dipilih.
+    if status_filter == 'archived':
+        query += " AND is_active = 0"
+    else:
+        query += " AND is_active = 1"
+
     if search:
         query += " AND (name LIKE ? OR sku LIKE ? OR barcode LIKE ? OR location LIKE ?)"
         term = f"%{search}%"
@@ -201,14 +208,18 @@ def inventory():
     cursor.execute(query, params)
     materials = [dict(row) for row in cursor.fetchall()]
 
-    # List of unique categories for filter
-    cursor.execute("SELECT DISTINCT category FROM materials ORDER BY category ASC")
+    # List of unique categories for filter (hanya material aktif)
+    cursor.execute("SELECT DISTINCT category FROM materials WHERE is_active = 1 ORDER BY category ASC")
     categories = [row[0] for row in cursor.fetchall()]
+
+    cursor.execute("SELECT COUNT(*) FROM materials WHERE is_active = 0")
+    archived_count = cursor.fetchone()[0]
 
     conn.close()
     return render_template('inventory.html',
                            materials=materials,
                            categories=categories,
+                           archived_count=archived_count,
                            search=search,
                            current_category=category,
                            status_filter=status_filter)
@@ -272,29 +283,93 @@ def save_material():
 
 @app.route('/material/delete/<int:material_id>', methods=['POST'])
 def delete_material(material_id):
+    """Hapus material.
+
+    Material tanpa riwayat dihapus permanen. Material yang sudah punya
+    transaksi / audit stok akan diarsipkan (soft delete) agar foreign key
+    dan dokumen lama tetap utuh.
+    """
     conn = database.get_db()
     cursor = conn.cursor()
     try:
-        cursor.execute("DELETE FROM materials WHERE id = ?", (material_id,))
-        if cursor.rowcount == 0:
+        cursor.execute("""
+            SELECT m.id, m.name, m.sku, m.stock,
+                   (SELECT COUNT(*) FROM transaction_items ti WHERE ti.material_id = m.id) AS tx_count,
+                   (SELECT COUNT(*) FROM stock_adjustments sa WHERE sa.material_id = m.id) AS adj_count
+            FROM materials m
+            WHERE m.id = ?
+        """, (material_id,))
+        mat = cursor.fetchone()
+
+        if not mat:
             conn.rollback()
             flash("Material tidak ditemukan (mungkin sudah dihapus).", "danger")
-        else:
+        elif mat['tx_count'] or mat['adj_count']:
+            cursor.execute("""
+                UPDATE materials
+                SET is_active = 0, archived_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND is_active = 1
+            """, (material_id,))
             conn.commit()
-            flash("Material berhasil dihapus dari inventaris.", "success")
+            msg = (
+                f"Material {mat['name']} ({mat['sku']}) diarsipkan karena sudah "
+                "dipakai pada riwayat transaksi/audit stok. Data historis tetap aman."
+            )
+            if mat['stock'] and float(mat['stock']) != 0:
+                msg += f" Stok tersisa {mat['stock']:g} — gunakan Stock Opname bila perlu dinolkan."
+            flash(msg, "success")
+        else:
+            cursor.execute("DELETE FROM materials WHERE id = ?", (material_id,))
+            conn.commit()
+            flash(f"Material {mat['name']} ({mat['sku']}) berhasil dihapus permanen.", "success")
     except sqlite3.IntegrityError:
+        # Fallback: bila constraint tetap terpicu (mis. ada referensi lain),
+        # jangan gagalkan user — arsipkan saja.
         conn.rollback()
-        flash(
-            "Material tidak dapat dihapus karena sudah dipakai pada riwayat "
-            "transaksi atau audit stok. Nonaktifkan lewat penyesuaian stok bila perlu.",
-            "danger"
-        )
+        try:
+            cursor.execute("""
+                UPDATE materials
+                SET is_active = 0, archived_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (material_id,))
+            conn.commit()
+            flash(
+                "Material tidak dapat dihapus permanen karena masih dirujuk data lain, "
+                "sehingga diarsipkan. Riwayat transaksi tetap tersimpan.",
+                "success"
+            )
+        except Exception:
+            conn.rollback()
+            flash("Material gagal dihapus maupun diarsipkan. Silakan coba lagi.", "danger")
     except Exception as e:
         conn.rollback()
         flash(f"Tidak dapat menghapus material: {str(e)}", "danger")
     finally:
         conn.close()
     return redirect(url_for('inventory'))
+
+@app.route('/material/restore/<int:material_id>', methods=['POST'])
+def restore_material(material_id):
+    """Batalkan arsip material agar kembali muncul di inventaris aktif."""
+    conn = database.get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            UPDATE materials
+            SET is_active = 1, archived_at = NULL
+            WHERE id = ? AND is_active = 0
+        """, (material_id,))
+        if cursor.rowcount == 0:
+            flash("Material tidak ditemukan atau sudah aktif kembali.", "danger")
+        else:
+            conn.commit()
+            flash("Material berhasil dipulihkan ke inventaris aktif.", "success")
+    except Exception as e:
+        conn.rollback()
+        flash(f"Gagal memulihkan material: {str(e)}", "danger")
+    finally:
+        conn.close()
+    return redirect(url_for('inventory', status='archived'))
 
 # ==========================================
 # TRANSAKSI & SURAT JALAN
@@ -540,7 +615,7 @@ def stock_opname():
     conn = database.get_db()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT * FROM materials ORDER BY name ASC")
+    cursor.execute("SELECT * FROM materials WHERE is_active = 1 ORDER BY name ASC")
     materials = [dict(row) for row in cursor.fetchall()]
 
     cursor.execute("""
@@ -585,10 +660,10 @@ def save_stock_opname():
     cursor = conn.cursor()
 
     try:
-        cursor.execute("SELECT stock, name, sku, unit FROM materials WHERE id = ?", (material_id,))
+        cursor.execute("SELECT stock, name, sku, unit FROM materials WHERE id = ? AND is_active = 1", (material_id,))
         mat = cursor.fetchone()
         if not mat:
-            flash("Material tidak valid!", "danger")
+            flash("Material tidak valid atau sudah diarsipkan!", "danger")
             return redirect(url_for('stock_opname'))
 
         old_stock = mat['stock']
@@ -641,7 +716,7 @@ def save_stock_opname():
 def export_materials():
     conn = database.get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT sku, barcode, name, category, unit, stock, min_stock, unit_price, (stock * unit_price) as total_val, location, specification FROM materials ORDER BY category, name")
+    cursor.execute("SELECT sku, barcode, name, category, unit, stock, min_stock, unit_price, (stock * unit_price) as total_val, location, specification FROM materials WHERE is_active = 1 ORDER BY category, name")
     rows = cursor.fetchall()
     conn.close()
 
@@ -860,7 +935,7 @@ def api_search_materials():
         cursor.execute("""
             SELECT id, sku, barcode, name, category, unit, stock, min_stock, unit_price, location, specification
             FROM materials
-            WHERE name LIKE ? OR sku LIKE ? OR barcode = ?
+            WHERE is_active = 1 AND (name LIKE ? OR sku LIKE ? OR barcode = ?)
             ORDER BY name ASC
             LIMIT 20
         """, (term, term, q))
@@ -868,6 +943,7 @@ def api_search_materials():
         cursor.execute("""
             SELECT id, sku, barcode, name, category, unit, stock, min_stock, unit_price, location, specification
             FROM materials
+            WHERE is_active = 1
             ORDER BY name ASC
             LIMIT 30
         """)
@@ -936,12 +1012,12 @@ def api_create_transaction():
 
             if mat_id not in materials_by_id:
                 cursor.execute(
-                    "SELECT id, sku, name, unit, stock, unit_price FROM materials WHERE id = ?",
+                    "SELECT id, sku, name, unit, stock, unit_price FROM materials WHERE id = ? AND is_active = 1",
                     (mat_id,)
                 )
                 m = cursor.fetchone()
                 if not m:
-                    raise ValueError(f"Material ID {mat_id} tidak ditemukan.")
+                    raise ValueError(f"Material ID {mat_id} tidak ditemukan atau sudah diarsipkan.")
                 materials_by_id[mat_id] = dict(m)
 
             mat = materials_by_id[mat_id]

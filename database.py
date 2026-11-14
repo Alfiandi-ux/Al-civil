@@ -17,6 +17,19 @@ def get_db():
     conn.execute("PRAGMA synchronous = NORMAL")
     return conn
 
+def migrate_schema(cursor):
+    """Tambahkan kolom baru yang belum ada pada database versi lama.
+
+    Idempoten: aman dipanggil setiap kali aplikasi start.
+    """
+    columns = {row['name'] for row in cursor.execute("PRAGMA table_info(materials)")}
+    if 'is_active' not in columns:
+        cursor.execute(
+            "ALTER TABLE materials ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1"
+        )
+    if 'archived_at' not in columns:
+        cursor.execute("ALTER TABLE materials ADD COLUMN archived_at DATETIME")
+
 def init_db():
     conn = get_db()
     cursor = conn.cursor()
@@ -38,6 +51,8 @@ def init_db():
         unit_price REAL NOT NULL DEFAULT 0,
         location TEXT DEFAULT 'Zona A-01',
         specification TEXT,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        archived_at DATETIME,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
@@ -126,6 +141,10 @@ def init_db():
         FOREIGN KEY (material_id) REFERENCES materials(id)
     )
     ''')
+
+    # Migrasi skema untuk database lama: kolom soft-delete material.
+    # SQLite tidak bisa ALTER CONSTRAINT, tapi bisa ALTER TABLE ADD COLUMN.
+    migrate_schema(cursor)
 
     # Check if materials are already seeded
     cursor.execute('SELECT COUNT(*) FROM materials')
@@ -307,6 +326,7 @@ def get_database_stats():
         'file_size_bytes': 0,
         'file_size_formatted': '0 KB',
         'materials_count': 0,
+        'archived_materials_count': 0,
         'projects_count': 0,
         'suppliers_count': 0,
         'transactions_count': 0,
@@ -326,8 +346,11 @@ def get_database_stats():
     try:
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM materials")
+        cursor.execute("SELECT COUNT(*) FROM materials WHERE is_active = 1")
         stats['materials_count'] = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM materials WHERE is_active = 0")
+        stats['archived_materials_count'] = cursor.fetchone()[0]
 
         cursor.execute("SELECT COUNT(*) FROM projects")
         stats['projects_count'] = cursor.fetchone()[0]

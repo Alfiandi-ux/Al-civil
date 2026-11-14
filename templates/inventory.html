@@ -44,6 +44,7 @@
                 <option value="">-- Semua Status --</option>
                 <option value="critical" {% if status_filter == 'critical' %}selected{% endif %}>⚠️ Stok Kritis</option>
                 <option value="safe" {% if status_filter == 'safe' %}selected{% endif %}>✅ Stok Aman</option>
+                <option value="archived" {% if status_filter == 'archived' %}selected{% endif %}>📁 Material Diarsipkan ({{ archived_count }})</option>
               </select>
             </div>
           </div>
@@ -62,10 +63,14 @@
   <div class="card">
     <div class="card-header">
       <h3>
-        <span>📦 Daftar Material ({{ materials|length }} Item)</span>
+        <span>📦 {% if status_filter == 'archived' %}Daftar Material Diarsipkan{% else %}Daftar Material{% endif %} ({{ materials|length }} Item)</span>
       </h3>
       <div>
-        <span class="badge badge-neutral">Satuan Sipil</span>
+        {% if status_filter == 'archived' %}
+          <span class="badge badge-warning">Status: Diarsipkan</span>
+        {% else %}
+          <span class="badge badge-neutral">Satuan Sipil</span>
+        {% endif %}
       </div>
     </div>
     <div class="card-body" style="padding: 0;">
@@ -118,21 +123,31 @@
                   {{ (m.stock * m.unit_price) | rupiah }}
                 </td>
                 <td style="text-align: center;">
-                  {% if m.stock <= m.min_stock %}
+                  {% if m.is_active == 0 %}
+                    <span class="badge badge-neutral" style="background: #e2e8f0; color: #475569;">Diarsipkan</span>
+                  {% elif m.stock <= m.min_stock %}
                     <span class="badge badge-danger">Kritis</span>
                   {% else %}
                     <span class="badge badge-success">Aman</span>
                   {% endif %}
                 </td>
                 <td style="text-align: center; white-space: nowrap;">
-                  <button class="btn btn-outline btn-sm" onclick='editMaterial({{ m | tojson }})'>
-                    ✏️ Edit
-                  </button>
-                  <form method="POST" action="{{ url_for('delete_material', material_id=m.id) }}" style="display: inline-block;" onsubmit='return confirm("Hapus material " + {{ m.name | tojson }} + "?");'>
-                    <button type="submit" class="btn btn-outline btn-sm" style="color: #ef4444; border-color: #fecaca;">
-                      🗑️
+                  {% if m.is_active == 0 %}
+                    <form method="POST" action="{{ url_for('restore_material', material_id=m.id) }}" style="display: inline-block;" onsubmit='return confirm("Pulihkan material " + {{ m.name | tojson }} + " kembali ke daftar aktif?");'>
+                      <button type="submit" class="btn btn-outline btn-sm" style="color: #10b981; border-color: #a7f3d0;">
+                        ♻️ Pulihkan
+                      </button>
+                    </form>
+                  {% else %}
+                    <button class="btn btn-outline btn-sm" onclick='editMaterial({{ m | tojson }})'>
+                      ✏️ Edit
                     </button>
-                  </form>
+                    <form method="POST" action="{{ url_for('delete_material', material_id=m.id) }}" style="display: inline-block;" onsubmit='return confirm("Hapus / arsipkan material " + {{ m.name | tojson }} + "?");'>
+                      <button type="submit" class="btn btn-outline btn-sm" style="color: #ef4444; border-color: #fecaca;" title="Hapus / Arsipkan Material">
+                        🗑️
+                      </button>
+                    </form>
+                  {% endif %}
                 </td>
               </tr>
             {% else %}
@@ -157,7 +172,9 @@
                 <div class="mobile-card-subtitle" style="font-family: monospace; font-weight: 600; color: #1e3a8a;">{{ m.sku }}</div>
               </div>
               <div style="text-align: right; flex-shrink: 0;">
-                {% if m.stock <= m.min_stock %}
+                {% if m.is_active == 0 %}
+                  <span class="badge badge-neutral" style="background: #e2e8f0; color: #475569;">Diarsipkan</span>
+                {% elif m.stock <= m.min_stock %}
                   <span class="badge badge-danger">Kritis</span>
                 {% else %}
                   <span class="badge badge-success">Aman</span>
@@ -188,14 +205,22 @@
               {% endif %}
             </div>
             <div class="mobile-card-footer">
-              <button class="btn btn-outline btn-sm" onclick='editMaterial({{ m | tojson }})' style="flex: 1; justify-content: center;">
-                ✏️ Edit
-              </button>
-              <form method="POST" action="{{ url_for('delete_material', material_id=m.id) }}" onsubmit='return confirm("Hapus material " + {{ m.name | tojson }} + "?");' style="flex: 0;">
-                <button type="submit" class="btn btn-outline btn-sm" style="color: #ef4444; border-color: #fecaca; padding: 0.5rem 0.75rem;">
-                  🗑️
+              {% if m.is_active == 0 %}
+                <form method="POST" action="{{ url_for('restore_material', material_id=m.id) }}" onsubmit='return confirm("Pulihkan material " + {{ m.name | tojson }} + " kembali ke daftar aktif?");' style="flex: 1;">
+                  <button type="submit" class="btn btn-outline btn-sm" style="width: 100%; justify-content: center; color: #10b981; border-color: #a7f3d0;">
+                    ♻️ Pulihkan Material
+                  </button>
+                </form>
+              {% else %}
+                <button class="btn btn-outline btn-sm" onclick='editMaterial({{ m | tojson }})' style="flex: 1; justify-content: center;">
+                  ✏️ Edit
                 </button>
-              </form>
+                <form method="POST" action="{{ url_for('delete_material', material_id=m.id) }}" onsubmit='return confirm("Hapus / arsipkan material " + {{ m.name | tojson }} + "?");' style="flex: 0;">
+                  <button type="submit" class="btn btn-outline btn-sm" style="color: #ef4444; border-color: #fecaca; padding: 0.5rem 0.75rem;" title="Hapus / Arsipkan Material">
+                    🗑️
+                  </button>
+                </form>
+              {% endif %}
             </div>
           </div>
         {% else %}
