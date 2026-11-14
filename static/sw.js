@@ -5,7 +5,7 @@
 
 // Naikkan versi setiap kali file statis berubah, supaya cache lama
 // (terutama app.js & quick_trans.js) otomatis dibuang di perangkat pengguna.
-const CACHE_NAME = 'alcivil-wms-v12';
+const CACHE_NAME = 'alcivil-wms-v13';
 const PRECACHE_ASSETS = [
   '/',
   '/dashboard',
@@ -13,6 +13,7 @@ const PRECACHE_ASSETS = [
   '/inventory',
   '/static/css/style.css',
   '/static/css/premium.css',
+  '/static/css/brutalist.css',
   '/static/js/app.js',
   '/static/js/quick_trans.js',
   '/static/icons/icon.svg',

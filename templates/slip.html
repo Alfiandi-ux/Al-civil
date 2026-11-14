@@ -43,7 +43,7 @@
     <div class="slip-header">
       <div class="slip-company">
         <div class="slip-company-brand">
-          <div style="background: linear-gradient(135deg, #2f5cff, #2f5cff); color: #fff; width: 52px; height: 52px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 1.3rem; border: 2px solid #d9a94a; flex-shrink: 0; letter-spacing: -0.5px;">
+          <div style="background: #ffd93d; color: #0a0a0a; width: 52px; height: 52px; border-radius: 2px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 1.3rem; border: 3px solid #0a0a0a; flex-shrink: 0; letter-spacing: -0.5px; box-shadow: 3px 3px 0 #0a0a0a;">
             AL
           </div>
           <div class="slip-company-text">
@@ -59,7 +59,7 @@
       </div>
 
       <div class="slip-doc-meta">
-        <div style="display: inline-block; background: {% if tx.type == 'OUT' %}#2f5cff{% elif tx.type == 'IN' %}#065f46{% else %}#7a5312{% endif %}; color: #fff; padding: 0.4rem 1rem; border-radius: 6px; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.4rem;">
+        <div style="display: inline-block; background: {% if tx.type == 'OUT' %}#2f5cff{% elif tx.type == 'IN' %}#c4f042{% else %}#ffd93d{% endif %}; color: {% if tx.type == 'OUT' %}#ffffff{% else %}#0a0a0a{% endif %}; padding: 0.4rem 1rem; border-radius: 2px; border: 2px solid #0a0a0a; box-shadow: 2px 2px 0 #0a0a0a; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.4rem;">
           {% if tx.type == 'OUT' %}
             SURAT JALAN RESMI
           {% elif tx.type == 'IN' %}
@@ -79,7 +79,7 @@
 
     <!-- Metadata Details -->
     <div class="slip-meta-grid">
-      <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 0.9rem; border-radius: 8px;">
+      <div style="background: #fffdf6; border: 2px solid #0a0a0a; padding: 0.9rem; border-radius: 2px;">
         <div style="font-size: 0.65rem; text-transform: uppercase; font-weight: 800; color: #64748b; margin-bottom: 0.4rem; letter-spacing: 0.08em;">
           {% if tx.type == 'OUT' %}TUJUAN PROYEK / SITE{% else %}VENDOR / PEMASOK{% endif %}
         </div>
@@ -87,13 +87,13 @@
           {{ tx.project_name or tx.supplier_name or 'Penyesuaian Internal Gudang' }}
         </div>
         {% if tx.notes %}
-          <div style="font-size: 0.78rem; color: #475569; margin-top: 0.4rem; border-top: 1px solid #e2e8f0; padding-top: 0.4rem;">
+          <div style="font-size: 0.78rem; color: #475569; margin-top: 0.4rem; border-top: 2px solid #0a0a0a; padding-top: 0.4rem;">
             <strong>Catatan / No. PO:</strong> {{ tx.notes }}
           </div>
         {% endif %}
       </div>
 
-      <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 0.9rem; border-radius: 8px;">
+      <div style="background: #fffdf6; border: 2px solid #0a0a0a; padding: 0.9rem; border-radius: 2px;">
         <div style="font-size: 0.65rem; text-transform: uppercase; font-weight: 800; color: #64748b; margin-bottom: 0.4rem; letter-spacing: 0.08em;">
           DATA TRANSPORTASI &amp; PETUGAS
         </div>
@@ -110,15 +110,15 @@
 
     <!-- Items Table -->
     <div class="slip-items-wrap" style="margin-bottom: 1.5rem; overflow-x: auto;">
-      <table class="table slip-items-table" style="border: 1px solid #cbd5e1; min-width: 500px; border-radius: 8px; overflow: hidden;">
+      <table class="table slip-items-table" style="border: 2px solid #0a0a0a; min-width: 500px; border-radius: 2px; overflow: hidden;">
         <thead>
           <tr>
-            <th style="width: 36px; text-align: center; background: #2f5cff; color: #fff;">No.</th>
-            <th style="background: #2f5cff; color: #fff;">Kode SKU</th>
-            <th style="background: #2f5cff; color: #fff;">Nama Material Sipil &amp; Uraian Teknis</th>
-            <th style="text-align: right; width: 100px; background: #2f5cff; color: #fff;">Kuantitas</th>
-            <th style="text-align: center; width: 80px; background: #2f5cff; color: #fff;">Satuan</th>
-            <th style="background: #2f5cff; color: #fff;">Keterangan / Lot No</th>
+            <th style="width: 36px; text-align: center; background: #ffd93d; color: #0a0a0a;">No.</th>
+            <th style="background: #ffd93d; color: #0a0a0a;">Kode SKU</th>
+            <th style="background: #ffd93d; color: #0a0a0a;">Nama Material Sipil &amp; Uraian Teknis</th>
+            <th style="text-align: right; width: 100px; background: #ffd93d; color: #0a0a0a;">Kuantitas</th>
+            <th style="text-align: center; width: 80px; background: #ffd93d; color: #0a0a0a;">Satuan</th>
+            <th style="background: #ffd93d; color: #0a0a0a;">Keterangan / Lot No</th>
           </tr>
         </thead>
         <tbody>
@@ -137,9 +137,9 @@
           {% endfor %}
         </tbody>
         <tfoot>
-          <tr style="background: linear-gradient(to right, #f1f5f9, #e2e8f0);">
+          <tr style="background: #ffd93d;">
             <td colspan="3" style="text-align: right; font-weight: 800; font-size: 0.85rem; color: #0f172a; padding: 0.75rem 1rem;">TOTAL KUANTITAS FISIK:</td>
-            <td style="text-align: right; font-size: 1.15rem; color: #2f5cff; font-weight: 900; padding: 0.75rem 1rem;">{{ tx.total_qty }}</td>
+            <td style="text-align: right; font-size: 1.15rem; color: #0a0a0a; font-weight: 900; padding: 0.75rem 1rem;">{{ tx.total_qty }}</td>
             <td style="text-align: center; font-weight: 700; color: #475569; padding: 0.75rem 1rem;">Unit</td>
             <td style="padding: 0.75rem 1rem;"></td>
           </tr>
@@ -148,15 +148,15 @@
     </div>
 
     <!-- Terms / Instruksi Mutu -->
-    <div style="font-size: 0.72rem; color: #64748b; line-height: 1.5; border-left: 3px solid #d9a94a; background: #fdf7ea; padding: 0.65rem 0.75rem; border-radius: 0 6px 6px 0; margin-bottom: 2rem;">
-      <strong style="color: #7a5312;">Instruksi Mutu &amp; K3:</strong>
+    <div style="font-size: 0.72rem; color: #2a2a2a; line-height: 1.5; border: 3px solid #0a0a0a; background: #ffd93d; padding: 0.65rem 0.75rem; border-radius: 2px; box-shadow: 3px 3px 0 #0a0a0a; margin-bottom: 2rem;">
+      <strong style="color: #0a0a0a;">Instruksi Mutu &amp; K3:</strong>
       Seluruh material yang dikirim wajib diperiksa fisik, sertifikat uji tarik/tekan baja &amp; tanggal kadaluarsa semen sebelum ditandatangani. Segala komplain atau selisih kuantitas harus dicatat pada lembar berita acara dalam tempo maksimal 1&times;24 jam sejak kedatangan di lokasi proyek.
     </div>
 
     <!-- Sign-off Block (4 Parties) -->
     <div class="slip-sign-grid">
       <div>
-        <div style="font-weight: 800; font-size: 0.82rem; color: #0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.3rem; margin-bottom: 0.3rem;">Disiapkan Oleh,</div>
+        <div style="font-weight: 800; font-size: 0.82rem; color: #0f172a; border-bottom: 2px solid #0a0a0a; padding-bottom: 0.3rem; margin-bottom: 0.3rem;">Disiapkan Oleh,</div>
         <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 0.3rem;">(Petugas / Checker Gudang)</div>
         <div class="slip-sign-box">
           <span style="font-weight: 700; font-size: 0.75rem; text-align: center; display: block;">{{ tx.operator_name or 'Staff Gudang AL-CIVIL' }}</span>
@@ -164,7 +164,7 @@
       </div>
 
       <div>
-        <div style="font-weight: 800; font-size: 0.82rem; color: #0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.3rem; margin-bottom: 0.3rem;">Dibawa / Diterima Oleh,</div>
+        <div style="font-weight: 800; font-size: 0.82rem; color: #0f172a; border-bottom: 2px solid #0a0a0a; padding-bottom: 0.3rem; margin-bottom: 0.3rem;">Dibawa / Diterima Oleh,</div>
         <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 0.3rem;">(Mandor Lapangan)</div>
         <div class="slip-sign-box">
           <span style="font-weight: 700; font-size: 0.75rem; text-align: center; display: block;">{{ tx.driver_name or '___________________' }}</span>
@@ -172,7 +172,7 @@
       </div>
 
       <div>
-        <div style="font-weight: 800; font-size: 0.82rem; color: #0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.3rem; margin-bottom: 0.3rem;">Diketahui Oleh,</div>
+        <div style="font-weight: 800; font-size: 0.82rem; color: #0f172a; border-bottom: 2px solid #0a0a0a; padding-bottom: 0.3rem; margin-bottom: 0.3rem;">Diketahui Oleh,</div>
         <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 0.3rem;">(Logistik Lapangan Proyek)</div>
         <div class="slip-sign-box">
           <span style="font-size: 0.75rem; color: #94a3b8; text-align: center; display: block;">___________________</span>
@@ -180,7 +180,7 @@
       </div>
 
       <div>
-        <div style="font-weight: 800; font-size: 0.82rem; color: #0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.3rem; margin-bottom: 0.3rem;">Disetujui Oleh,</div>
+        <div style="font-weight: 800; font-size: 0.82rem; color: #0f172a; border-bottom: 2px solid #0a0a0a; padding-bottom: 0.3rem; margin-bottom: 0.3rem;">Disetujui Oleh,</div>
         <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 0.3rem;">(Site Manager / PM)</div>
         <div class="slip-sign-box">
           <span style="font-size: 0.75rem; color: #94a3b8; text-align: center; display: block;">___________________</span>
@@ -189,7 +189,7 @@
     </div>
 
     <!-- Print Footer -->
-    <div class="slip-print-foot" style="margin-top: 1.5rem; padding-top: 0.75rem; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; font-size: 0.7rem; color: #94a3b8;">
+    <div class="slip-print-foot" style="margin-top: 1.5rem; padding-top: 0.75rem; border-top: 2px solid #0a0a0a; display: flex; justify-content: space-between; align-items: center; font-size: 0.7rem; color: #94a3b8;">
       <span>Dicetak oleh sistem AL-CIVIL WMS &bull; {{ tx.created_at | datetime_id }}</span>
       <span>Dokumen ini sah tanpa tanda tangan digital</span>
     </div>

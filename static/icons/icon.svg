@@ -1,26 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#1c347f"/>
-      <stop offset="52%" stop-color="#101a33"/>
-      <stop offset="100%" stop-color="#070b15"/>
-    </linearGradient>
-    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#f4d79c"/>
-      <stop offset="50%" stop-color="#d9a94a"/>
-      <stop offset="100%" stop-color="#b78226"/>
-    </linearGradient>
-    <linearGradient id="sapphire" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#6f8dff"/>
-      <stop offset="100%" stop-color="#2f5cff"/>
-    </linearGradient>
-  </defs>
-  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
-  <rect x="22" y="22" width="468" height="468" rx="96" fill="none" stroke="url(#gold)" stroke-width="10" opacity="0.9"/>
-  <circle cx="388" cy="124" r="52" fill="url(#sapphire)" opacity="0.22"/>
-  <circle cx="388" cy="124" r="18" fill="url(#sapphire)" opacity="0.7"/>
-  <path d="M 116 382 L 116 190 L 320 190 L 320 238 L 258 238 L 258 382 Z" fill="#ffffff" opacity="0.08"/>
-  <text x="256" y="318" font-family="Sora, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="176" font-weight="700" fill="#ffffff" text-anchor="middle" letter-spacing="-6">AL</text>
-  <rect x="138" y="354" width="236" height="40" rx="10" fill="url(#gold)"/>
-  <text x="256" y="382" font-family="Sora, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="21" font-weight="700" fill="#1a1204" text-anchor="middle" letter-spacing="4">CIVIL WMS</text>
+  <!-- Neo-brutalist AL-CIVIL app icon -->
+  <rect width="512" height="512" fill="#ffd93d"/>
+  <rect x="26" y="26" width="460" height="460" fill="#ffd93d" stroke="#0a0a0a" stroke-width="24"/>
+  <rect x="72" y="72" width="368" height="368" fill="#ffffff" stroke="#0a0a0a" stroke-width="12"/>
+  <text x="256" y="300" font-family="'Arial Black', 'Helvetica Neue', Arial, sans-serif" font-size="176" font-weight="900" fill="#0a0a0a" text-anchor="middle" letter-spacing="-8">AL</text>
+  <rect x="100" y="336" width="312" height="64" fill="#0a0a0a"/>
+  <text x="256" y="380" font-family="'Courier New', monospace" font-size="26" font-weight="700" fill="#ffd93d" text-anchor="middle" letter-spacing="5">CIVIL WMS</text>
+  <rect x="396" y="88" width="28" height="28" fill="#ff5d8f" stroke="#0a0a0a" stroke-width="8"/>
 </svg>
