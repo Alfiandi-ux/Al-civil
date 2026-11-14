@@ -21,7 +21,7 @@
   
   <!-- Action Bar (Hidden when printing) -->
   <div class="slip-action-bar no-print">
-    <div style="display: flex; gap: 0.5rem; align-items: center;">
+    <div class="slip-action-group">
       <a href="{{ url_for('transactions') }}" class="btn btn-outline">
         ← Kembali ke Riwayat
       </a>
@@ -29,7 +29,7 @@
         ⚡ Transaksi Baru
       </a>
     </div>
-    <div>
+    <div class="slip-action-group slip-action-group-print">
       <button class="btn btn-primary btn-lg" onclick="window.print()">
         🖨️ Cetak Surat Jalan
       </button>
@@ -42,11 +42,11 @@
     <!-- Slip Header -->
     <div class="slip-header">
       <div class="slip-company">
-        <div style="display: flex; align-items: center; gap: 0.85rem;">
+        <div class="slip-company-brand">
           <div style="background: linear-gradient(135deg, #2f5cff, #2f5cff); color: #fff; width: 52px; height: 52px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 1.3rem; border: 2px solid #d9a94a; flex-shrink: 0; letter-spacing: -0.5px;">
             AL
           </div>
-          <div>
+          <div class="slip-company-text">
             <h2 style="font-size: 1.35rem; font-weight: 900; color: #0f172a; letter-spacing: -0.02em;">AL-CIVIL WAREHOUSE</h2>
             <div style="font-size: 0.75rem; color: #475569; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin-top: 2px;">
               Civil Engineering Logistics &amp; Central Supply Depot
@@ -58,7 +58,7 @@
         </div>
       </div>
 
-      <div style="text-align: right; flex-shrink: 0;">
+      <div class="slip-doc-meta">
         <div style="display: inline-block; background: {% if tx.type == 'OUT' %}#2f5cff{% elif tx.type == 'IN' %}#065f46{% else %}#7a5312{% endif %}; color: #fff; padding: 0.4rem 1rem; border-radius: 6px; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.4rem;">
           {% if tx.type == 'OUT' %}
             SURAT JALAN RESMI
@@ -109,8 +109,8 @@
     </div>
 
     <!-- Items Table -->
-    <div style="margin-bottom: 1.5rem; overflow-x: auto;">
-      <table class="table" style="border: 1px solid #cbd5e1; min-width: 500px; border-radius: 8px; overflow: hidden;">
+    <div class="slip-items-wrap" style="margin-bottom: 1.5rem; overflow-x: auto;">
+      <table class="table slip-items-table" style="border: 1px solid #cbd5e1; min-width: 500px; border-radius: 8px; overflow: hidden;">
         <thead>
           <tr>
             <th style="width: 36px; text-align: center; background: #2f5cff; color: #fff;">No.</th>
@@ -124,15 +124,15 @@
         <tbody>
           {% for item in items %}
             <tr>
-              <td style="text-align: center; font-weight: 700; color: #475569;">{{ loop.index }}</td>
-              <td style="font-weight: 800; color: #2f5cff; font-family: monospace; font-size: 0.85rem;">{{ item.sku }}</td>
-              <td>
+              <td data-label="No." style="text-align: center; font-weight: 700; color: #475569;">{{ loop.index }}</td>
+              <td data-label="Kode SKU" style="font-weight: 800; color: #2f5cff; font-family: monospace; font-size: 0.85rem;">{{ item.sku }}</td>
+              <td data-label="Material" class="slip-cell-material">
                 <div style="font-weight: 700; color: #0f172a; font-size: 0.9rem;">{{ item.material_name }}</div>
                 {# BUG-11 FIX: Catatan hanya ditampilkan sekali di kolom nama material, kolom terpisah dihapus #}
               </td>
-              <td style="text-align: right; font-weight: 900; font-size: 1.1rem; color: #0f172a;">{{ item.qty }}</td>
-              <td style="text-align: center; font-weight: 600; color: #475569; font-size: 0.85rem;">{{ item.unit }}</td>
-              <td style="font-size: 0.78rem; color: #64748b;">{{ item.notes or '-' }}</td>
+              <td data-label="Kuantitas" style="text-align: right; font-weight: 900; font-size: 1.1rem; color: #0f172a;">{{ item.qty }}</td>
+              <td data-label="Satuan" style="text-align: center; font-weight: 600; color: #475569; font-size: 0.85rem;">{{ item.unit }}</td>
+              <td data-label="Keterangan" style="font-size: 0.78rem; color: #64748b;">{{ item.notes or '-' }}</td>
             </tr>
           {% endfor %}
         </tbody>
@@ -189,7 +189,7 @@
     </div>
 
     <!-- Print Footer -->
-    <div style="margin-top: 1.5rem; padding-top: 0.75rem; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; font-size: 0.7rem; color: #94a3b8;">
+    <div class="slip-print-foot" style="margin-top: 1.5rem; padding-top: 0.75rem; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; font-size: 0.7rem; color: #94a3b8;">
       <span>Dicetak oleh sistem AL-CIVIL WMS &bull; {{ tx.created_at | datetime_id }}</span>
       <span>Dokumen ini sah tanpa tanda tangan digital</span>
     </div>

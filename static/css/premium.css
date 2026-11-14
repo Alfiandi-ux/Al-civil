@@ -2083,3 +2083,260 @@ textarea.form-control {
   border-color: rgba(255, 255, 255, 0.38) !important;
   color: #ffffff !important;
 }
+
+/* ===================== ANDROID FIT (SURAT JALAN / DOCUMENT LISTS) ===================== */
+.slip-action-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.slip-action-group-print { flex-shrink: 0; }
+.slip-company { min-width: 0; }
+.slip-company-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-width: 0;
+}
+.slip-company-text { min-width: 0; }
+.slip-company-text h2 { overflow-wrap: anywhere; }
+.slip-doc-meta {
+  flex-shrink: 0;
+  max-width: 100%;
+  text-align: right;
+}
+.slip-print-foot { flex-wrap: wrap; gap: 0.4rem 0.75rem; }
+
+/* Use the card layout all the way up to small tablets / landscape phones
+   so a wide desktop table never appears on Android. */
+@media screen and (max-width: 1024px) {
+  .desktop-table-view { display: none !important; }
+  .mobile-card-view { display: block !important; }
+  .container,
+  .card,
+  .card-header,
+  .card-body,
+  .mobile-card-view,
+  .page-header,
+  .filter-bar { min-width: 0; max-width: 100%; }
+}
+
+@media screen and (max-width: 768px) {
+  /* Page header & card header must never push the layout wider than the screen */
+  .page-header .page-title { width: 100%; min-width: 0; }
+  .page-title h2 { overflow-wrap: anywhere; }
+  .header-actions { width: 100%; }
+  .header-actions .btn { flex: 1 1 130px; }
+  .card-header { flex-wrap: wrap; gap: 0.5rem; }
+  .card-header h3 { min-width: 0; overflow-wrap: anywhere; }
+
+  .mobile-card { min-width: 0; }
+  .mobile-card-header > * { min-width: 0; }
+  .mobile-card-title { overflow-wrap: anywhere; word-break: break-word; }
+  .mobile-card-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .mobile-card-body > div { min-width: 0; }
+  .mobile-card-metric-val { overflow-wrap: anywhere; }
+  .mobile-card-tags > span { overflow-wrap: anywhere; }
+
+  .filter-actions { flex-wrap: wrap; }
+  .filter-actions .btn { flex: 1 1 auto; }
+
+  /* --- Slip / Surat Jalan document --- */
+  .slip-action-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.65rem;
+    padding-top: 0;
+  }
+  .slip-action-group { width: 100%; }
+  .slip-action-group .btn { flex: 1 1 auto; justify-content: center; }
+  .slip-action-group-print { flex-shrink: 1; }
+  .slip-action-group-print .btn { width: 100%; }
+
+  .slip-header {
+    flex-direction: column;
+    gap: 0.9rem;
+  }
+  .slip-doc-meta {
+    width: 100%;
+    text-align: left;
+    flex-shrink: 1;
+  }
+  .slip-company-brand { align-items: flex-start; gap: 0.65rem; }
+  .slip-company-brand > div:first-child {
+    width: 42px !important;
+    height: 42px !important;
+    font-size: 1.05rem !important;
+  }
+  .slip-company-text h2 { font-size: 1.08rem !important; }
+  .slip-print-foot { font-size: 0.65rem; }
+}
+
+@media screen and (max-width: 640px) {
+  /* Items table becomes stacked cards so nothing needs horizontal scrolling */
+  .slip-items-wrap { overflow: visible !important; }
+  .slip-items-table {
+    min-width: 0 !important;
+    border: none !important;
+    background: transparent !important;
+  }
+  .slip-items-table thead { display: none; }
+  .slip-items-table tbody,
+  .slip-items-table tfoot { display: block; width: 100%; }
+  .slip-items-table tbody tr {
+    display: block;
+    margin-bottom: 0.7rem;
+    padding: 0.75rem 0.85rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background: #ffffff;
+  }
+  .slip-items-table tbody tr:nth-child(even) { background: #ffffff; }
+  .slip-items-table tbody td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.85rem;
+    width: auto;
+    padding: 0.22rem 0 !important;
+    border: none;
+    text-align: right !important;
+    font-size: 0.84rem;
+    overflow-wrap: anywhere;
+  }
+  .slip-items-table tbody td::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    color: #64748b;
+    font-size: 0.66rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-align: left;
+  }
+  .slip-items-table tbody td.slip-cell-material {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.1rem;
+    padding-bottom: 0.45rem !important;
+    text-align: left !important;
+  }
+  .slip-items-table tfoot tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.35rem 0.6rem;
+    padding: 0.7rem 0.85rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 12px;
+    background: #f1f5f9;
+  }
+  .slip-items-table tfoot td {
+    display: block;
+    width: auto;
+    padding: 0 !important;
+    border: none;
+  }
+  .slip-items-table tfoot td[colspan] {
+    flex: 1 1 100%;
+    text-align: left !important;
+  }
+  .slip-items-table tfoot td:last-child { display: none; }
+}
+
+@media screen and (max-width: 380px) {
+  .container { padding: 0 0.75rem; }
+  .card-body { padding: 0.9rem; }
+  .mobile-card-view { padding: 0.55rem !important; }
+  .mobile-card { padding: 0.85rem; border-radius: 13px; }
+  .mobile-card-body { grid-template-columns: minmax(0, 1fr); gap: 0.55rem; }
+  .mobile-card-metric-val { font-size: 0.98rem; }
+  .mobile-card-title { font-size: 0.76rem; }
+  .header-actions .btn { flex: 1 1 100%; }
+  .slip-company-brand > div:first-child {
+    width: 36px !important;
+    height: 36px !important;
+    font-size: 0.92rem !important;
+  }
+  .slip-company-text h2 { font-size: 0.98rem !important; }
+  .slip-action-group .btn { flex: 1 1 100%; }
+}
+
+/* Keep the Surat Jalan items as a real table when printing, even if the
+   print preview reports a narrow viewport. */
+@media print {
+  .slip-items-wrap { overflow: visible !important; }
+  .slip-items-table { min-width: 0 !important; border-collapse: collapse !important; }
+  .slip-items-table thead { display: table-header-group !important; }
+  .slip-items-table tbody { display: table-row-group !important; }
+  .slip-items-table tfoot { display: table-footer-group !important; }
+  .slip-items-table tr { display: table-row !important; }
+  .slip-items-table th,
+  .slip-items-table td {
+    display: table-cell !important;
+    width: auto;
+    padding: 0.35rem 0.45rem !important;
+    border: 1px solid #cbd5e1 !important;
+  }
+  .slip-items-table td::before { content: none !important; }
+}
+
+/* ===================== BACKUP & MIGRASI — ANDROID FIT ===================== */
+.backup-option {
+  width: 100%;
+  white-space: normal;
+  line-height: 1.35;
+}
+.backup-option-text { min-width: 0; }
+.backup-option-text > div { white-space: normal; }
+
+@media screen and (max-width: 768px) {
+  .backup-header-actions .btn {
+    flex: 1 1 100%;
+    width: 100%;
+    white-space: normal;
+    line-height: 1.35;
+    text-align: center;
+  }
+  .backup-option {
+    padding: 0.85rem 0.9rem !important;
+    align-items: flex-start !important;
+  }
+  .btn.backup-snapshot-btn,
+  .btn.backup-import-btn {
+    white-space: normal;
+    line-height: 1.35;
+    padding-left: 0.85rem;
+    padding-right: 0.85rem;
+  }
+  .backup-card-actions { flex-wrap: wrap; }
+  .backup-card-actions .btn { flex: 0 1 auto; white-space: normal; }
+}
+
+@media screen and (max-width: 480px) {
+  .backup-option > span:first-child {
+    font-size: 1.25rem !important;
+    margin-right: 0.35rem !important;
+    margin-top: 1px;
+  }
+  .backup-option-text > div:first-child { font-size: 0.86rem !important; }
+  .backup-option-text > div:last-child { font-size: 0.72rem !important; }
+  .backup-card-actions { gap: 0.4rem; }
+  .backup-card-actions .btn { flex: 1 1 auto; }
+}
+
+.modal-confirm-actions { flex-wrap: wrap; }
+@media screen and (max-width: 480px) {
+  .modal-confirm-actions .btn {
+    flex: 1 1 100%;
+    white-space: normal;
+    line-height: 1.35;
+  }
+}
+
+@media screen and (max-width: 768px) {
+  .mobile-card-header { flex-wrap: wrap; }
+  .mobile-card-header > div { min-width: 0; }
+}
