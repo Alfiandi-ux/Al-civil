@@ -6,6 +6,7 @@ import os
 import csv
 import io
 import json
+import secrets
 import sqlite3
 import threading
 from datetime import datetime, timezone
@@ -15,8 +16,18 @@ from flask import (
 )
 import database
 
+# Muat konfigurasi dari file .env bila tersedia (opsional).
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'al-civil-secret-key-super-secure-termux-2026')
+# SECRET_KEY wajib diisi lewat environment saat deploy publik.
+# Fallback acak hanya untuk pemakaian lokal, sehingga tidak ada kunci rahasia
+# yang ikut ter-commit ke repositori.
+app.secret_key = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
 
 # SQLite hanya mengizinkan satu penulis pada satu waktu. Lock ini membuat
 # pembuatan nomor dokumen + insert transaksi berjalan atomik di dalam proses,

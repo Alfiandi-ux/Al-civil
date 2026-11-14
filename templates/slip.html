@@ -43,7 +43,7 @@
     <div class="slip-header">
       <div class="slip-company">
         <div style="display: flex; align-items: center; gap: 0.85rem;">
-          <div style="background: linear-gradient(135deg, #1d4ed8, #2563eb); color: #fff; width: 52px; height: 52px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 1.3rem; border: 2px solid #f59e0b; flex-shrink: 0; letter-spacing: -0.5px;">
+          <div style="background: linear-gradient(135deg, #2f5cff, #2f5cff); color: #fff; width: 52px; height: 52px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 1.3rem; border: 2px solid #d9a94a; flex-shrink: 0; letter-spacing: -0.5px;">
             AL
           </div>
           <div>
@@ -59,7 +59,7 @@
       </div>
 
       <div style="text-align: right; flex-shrink: 0;">
-        <div style="display: inline-block; background: {% if tx.type == 'OUT' %}#1d4ed8{% elif tx.type == 'IN' %}#065f46{% else %}#92400e{% endif %}; color: #fff; padding: 0.4rem 1rem; border-radius: 6px; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.4rem;">
+        <div style="display: inline-block; background: {% if tx.type == 'OUT' %}#2f5cff{% elif tx.type == 'IN' %}#065f46{% else %}#7a5312{% endif %}; color: #fff; padding: 0.4rem 1rem; border-radius: 6px; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.4rem;">
           {% if tx.type == 'OUT' %}
             SURAT JALAN RESMI
           {% elif tx.type == 'IN' %}
@@ -113,19 +113,19 @@
       <table class="table" style="border: 1px solid #cbd5e1; min-width: 500px; border-radius: 8px; overflow: hidden;">
         <thead>
           <tr>
-            <th style="width: 36px; text-align: center; background: #1d4ed8; color: #fff;">No.</th>
-            <th style="background: #1d4ed8; color: #fff;">Kode SKU</th>
-            <th style="background: #1d4ed8; color: #fff;">Nama Material Sipil &amp; Uraian Teknis</th>
-            <th style="text-align: right; width: 100px; background: #1d4ed8; color: #fff;">Kuantitas</th>
-            <th style="text-align: center; width: 80px; background: #1d4ed8; color: #fff;">Satuan</th>
-            <th style="background: #1d4ed8; color: #fff;">Keterangan / Lot No</th>
+            <th style="width: 36px; text-align: center; background: #2f5cff; color: #fff;">No.</th>
+            <th style="background: #2f5cff; color: #fff;">Kode SKU</th>
+            <th style="background: #2f5cff; color: #fff;">Nama Material Sipil &amp; Uraian Teknis</th>
+            <th style="text-align: right; width: 100px; background: #2f5cff; color: #fff;">Kuantitas</th>
+            <th style="text-align: center; width: 80px; background: #2f5cff; color: #fff;">Satuan</th>
+            <th style="background: #2f5cff; color: #fff;">Keterangan / Lot No</th>
           </tr>
         </thead>
         <tbody>
           {% for item in items %}
             <tr>
               <td style="text-align: center; font-weight: 700; color: #475569;">{{ loop.index }}</td>
-              <td style="font-weight: 800; color: #1d4ed8; font-family: monospace; font-size: 0.85rem;">{{ item.sku }}</td>
+              <td style="font-weight: 800; color: #2f5cff; font-family: monospace; font-size: 0.85rem;">{{ item.sku }}</td>
               <td>
                 <div style="font-weight: 700; color: #0f172a; font-size: 0.9rem;">{{ item.material_name }}</div>
                 {# BUG-11 FIX: Catatan hanya ditampilkan sekali di kolom nama material, kolom terpisah dihapus #}
@@ -139,7 +139,7 @@
         <tfoot>
           <tr style="background: linear-gradient(to right, #f1f5f9, #e2e8f0);">
             <td colspan="3" style="text-align: right; font-weight: 800; font-size: 0.85rem; color: #0f172a; padding: 0.75rem 1rem;">TOTAL KUANTITAS FISIK:</td>
-            <td style="text-align: right; font-size: 1.15rem; color: #1d4ed8; font-weight: 900; padding: 0.75rem 1rem;">{{ tx.total_qty }}</td>
+            <td style="text-align: right; font-size: 1.15rem; color: #2f5cff; font-weight: 900; padding: 0.75rem 1rem;">{{ tx.total_qty }}</td>
             <td style="text-align: center; font-weight: 700; color: #475569; padding: 0.75rem 1rem;">Unit</td>
             <td style="padding: 0.75rem 1rem;"></td>
           </tr>
@@ -148,8 +148,8 @@
     </div>
 
     <!-- Terms / Instruksi Mutu -->
-    <div style="font-size: 0.72rem; color: #64748b; line-height: 1.5; border-left: 3px solid #f59e0b; background: #fffbeb; padding: 0.65rem 0.75rem; border-radius: 0 6px 6px 0; margin-bottom: 2rem;">
-      <strong style="color: #92400e;">Instruksi Mutu &amp; K3:</strong>
+    <div style="font-size: 0.72rem; color: #64748b; line-height: 1.5; border-left: 3px solid #d9a94a; background: #fdf7ea; padding: 0.65rem 0.75rem; border-radius: 0 6px 6px 0; margin-bottom: 2rem;">
+      <strong style="color: #7a5312;">Instruksi Mutu &amp; K3:</strong>
       Seluruh material yang dikirim wajib diperiksa fisik, sertifikat uji tarik/tekan baja &amp; tanggal kadaluarsa semen sebelum ditandatangani. Segala komplain atau selisih kuantitas harus dicatat pada lembar berita acara dalam tempo maksimal 1&times;24 jam sejak kedatangan di lokasi proyek.
     </div>
 

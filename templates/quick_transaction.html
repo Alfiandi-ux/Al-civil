@@ -32,8 +32,9 @@
   <!-- Page Header -->
   <div class="page-header" style="margin-bottom: 1rem;">
     <div class="page-title">
-      <h2>⚡ Mode Transaksi Cepat</h2>
-      <p>Pencatatan Surat Jalan &amp; Penerimaan Material Real-time</p>
+      <span class="page-eyebrow">Fast Dispatch Mode</span>
+      <h2>Mode Transaksi Cepat</h2>
+      <p>Pencatatan Surat Jalan dan penerimaan material secara real-time.</p>
     </div>
     <div class="header-actions">
       <button class="btn btn-outline" onclick="window.clearAllCart()">
@@ -125,7 +126,7 @@
 
     <!-- RIGHT PANEL: Cart / Staging & Dispatch Destination -->
     <div class="pos-mobile-panel" id="panelCart">
-      <div class="pos-panel" style="border-top: 4px solid #2563eb;">
+      <div class="pos-panel pos-cart-panel">
         
         <h3 style="font-size: 1rem; font-weight: 800; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
           <span>📦 Daftar Muatan Material</span>
@@ -163,12 +164,12 @@
           </div>
           <div class="cart-summary-total">
             <span>Estimasi Nilai Barang:</span>
-            <span id="cartTotalAmount" style="color: #1e3a8a;">Rp 0</span>
+            <span id="cartTotalAmount">Rp 0</span>
           </div>
         </div>
 
         <!-- Dispatch / Intake Information Form -->
-        <div style="background: #f8fafc; border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; margin-bottom: 1.2rem;">
+        <div class="form-surface">
           
           <!-- Outbound: Project Destination -->
           <div class="form-group" id="projectSelectGroup">
@@ -267,7 +268,7 @@
 <div id="successModal" class="modal-overlay">
   <div class="modal-card" style="text-align: center; max-width: 480px;">
     <div style="padding: 2rem 1.5rem;">
-      <div style="width: 60px; height: 60px; border-radius: 50%; background: #ecfdf5; color: #10b981; font-size: 2rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem auto; border: 2px solid #a7f3d0;">
+      <div class="success-ring">
         ✓
       </div>
       <h3 style="font-size: 1.25rem; font-weight: 800; color: #0f172a; margin-bottom: 0.4rem;">
@@ -298,7 +299,7 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="{{ url_for('static', filename='js/quick_trans.js', v=6) }}"></script>
+<script src="{{ url_for('static', filename='js/quick_trans.js', v=7) }}"></script>
 <script>
 // Mobile tab switching for POS
 function switchMobileTab(tab) {

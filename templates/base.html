@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
-  <meta name="theme-color" content="#ffffff">
+  <meta name="theme-color" content="#0b1220">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="AL-CIVIL">
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='icons/icon.svg') }}">
@@ -14,8 +14,9 @@
   <title>{% block title %}AL-CIVIL{% endblock %} | Sistem Gudang Sipil &amp; Konstruksi</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=8) }}">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Sora:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=10) }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/premium.css', v=3) }}">
   {% block extra_head %}{% endblock %}
 </head>
 <body>
@@ -23,58 +24,68 @@
   <!-- ===== TOP NAVBAR ===== -->
   <header class="navbar no-print">
     <div class="container nav-container">
-      <a href="{{ url_for('dashboard') }}" class="brand">
-        <div class="brand-icon">AL</div>
+      <a href="{{ url_for('dashboard') }}" class="brand" aria-label="AL-CIVIL Warehouse">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M3.25 20.25V9.9c0-.34.17-.66.46-.85l7.5-4.87a1.4 1.4 0 0 1 1.58 0l7.5 4.87c.29.19.46.51.46.85v10.35" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M7.6 20.25v-5.9c0-.58.47-1.05 1.05-1.05h6.7c.58 0 1.05.47 1.05 1.05v5.9" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M2.5 20.25h19" stroke="currentColor" stroke-width="1.55" stroke-linecap="round"/>
+            <path d="M9.4 16.35h5.2" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" opacity=".65"/>
+          </svg>
+          <span class="brand-mark-dot"></span>
+        </span>
         <div class="brand-text">
           <h1>AL-CIVIL</h1>
-          <span>Civil Engineering WMS</span>
+          <span>Construction WMS</span>
         </div>
       </a>
 
       <!-- Desktop Navigation Links -->
-      <nav class="desktop-nav">
+      <nav class="desktop-nav" aria-label="Navigasi utama">
         <ul class="nav-links">
           <li>
             <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
-              <span>📊</span> Dashboard
+              <span aria-hidden="true">◈</span> Dashboard
             </a>
           </li>
           <li>
-            <a href="{{ url_for('quick_transaction') }}" class="nav-quick-btn">
-              <span>⚡</span> Transaksi Cepat
+            <a href="{{ url_for('quick_transaction') }}" class="nav-quick-btn" title="Mode Transaksi Cepat (F2)">
+              <span aria-hidden="true">⚡</span> Transaksi
               <span class="kbd-badge">F2</span>
             </a>
           </li>
           <li>
-            <a href="{{ url_for('inventory') }}" class="nav-link {% if request.endpoint == 'inventory' %}active{% endif %}">
-              <span>📦</span> Master Material
+            <a href="{{ url_for('inventory') }}" class="nav-link {% if request.endpoint == 'inventory' %}active{% endif %}" title="Master Material Sipil">
+              <span aria-hidden="true">▦</span> Material
               {% if critical_count > 0 %}
-                <span class="badge badge-danger" style="font-size: 0.65rem; padding: 1px 7px; border-radius: 999px;">{{ critical_count }}</span>
+                <span class="badge badge-danger">{{ critical_count }}</span>
               {% endif %}
             </a>
           </li>
           <li>
             <a href="{{ url_for('transactions') }}" class="nav-link {% if request.endpoint in ['transactions', 'view_slip'] %}active{% endif %}">
-              <span>📄</span> Surat Jalan
+              <span aria-hidden="true">▤</span> Surat Jalan
             </a>
           </li>
           <li>
-            <a href="{{ url_for('projects') }}" class="nav-link {% if request.endpoint == 'projects' %}active{% endif %}">
-              <span>🏗️</span> Proyek &amp; Vendor
+            <a href="{{ url_for('projects') }}" class="nav-link {% if request.endpoint == 'projects' %}active{% endif %}" title="Proyek &amp; Vendor">
+              <span aria-hidden="true">◱</span> Proyek
             </a>
           </li>
           <li>
-            <a href="{{ url_for('stock_opname') }}" class="nav-link {% if request.endpoint == 'stock_opname' %}active{% endif %}">
-              <span>⚖️</span> Stock Opname
+            <a href="{{ url_for('stock_opname') }}" class="nav-link {% if request.endpoint == 'stock_opname' %}active{% endif %}" title="Stock Opname &amp; Audit Fisik">
+              <span aria-hidden="true">◐</span> Opname
             </a>
           </li>
           <li>
-            <a href="{{ url_for('backup_view') }}" class="nav-link {% if request.endpoint == 'backup_view' %}active{% endif %}">
-              <span>💾</span> Backup &amp; Migrasi
+            <a href="{{ url_for('backup_view') }}" class="nav-link {% if request.endpoint == 'backup_view' %}active{% endif %}" title="Backup &amp; Migrasi Data">
+              <span aria-hidden="true">▣</span> Backup
             </a>
           </li>
         </ul>
       </nav>
+
+      <span class="nav-status"><span class="live-dot"></span> Lokal</span>
 
       <!-- Mobile Top Quick Action -->
       <div class="mobile-top-action">
@@ -213,15 +224,24 @@
   <!-- ===== FOOTER ===== -->
   <footer class="footer no-print">
     <div class="container footer-content">
-      <div style="display: flex; align-items: center; gap: 0.6rem; color: #475569;">
-        <div class="brand-icon" style="width: 24px; height: 24px; font-size: 0.6rem; border-radius: 5px; border-width: 1px;">AL</div>
-        <strong style="color: #64748b;">AL-CIVIL WMS</strong>
-        <span>• Server Lokal Termux Aktif</span>
+      <div class="footer-brand">
+        <span class="brand-mark brand-mark-sm" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M3.25 20.25V9.9c0-.34.17-.66.46-.85l7.5-4.87a1.4 1.4 0 0 1 1.58 0l7.5 4.87c.29.19.46.51.46.85v10.35" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M7.6 20.25v-5.9c0-.58.47-1.05 1.05-1.05h6.7c.58 0 1.05.47 1.05 1.05v5.9" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M2.5 20.25h19" stroke="currentColor" stroke-width="1.55" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <div>
+          <strong>AL-CIVIL WMS</strong>
+          <span>Civil &amp; Construction Logistics</span>
+        </div>
       </div>
-      <div style="display: flex; gap: 1rem; align-items: center; color: #475569; font-size: 0.75rem;">
-        <span>
-          <kbd class="kbd-badge" style="background: rgba(255,255,255,0.1); color: #94a3b8;">F2</kbd> Transaksi Cepat &bull;
-          <kbd class="kbd-badge" style="background: rgba(255,255,255,0.1); color: #94a3b8;">F9</kbd> Simpan
+      <div class="footer-meta">
+        <span class="footer-status"><span class="live-dot"></span> Server Lokal Aktif</span>
+        <span class="footer-keys">
+          <kbd class="kbd-badge">F2</kbd> Transaksi
+          <kbd class="kbd-badge">F9</kbd> Simpan
         </span>
         <span>&copy; {{ current_year }} AL-CIVIL Engineering</span>
       </div>

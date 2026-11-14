@@ -1,10 +1,10 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/usr/bin/env bash
 # ==========================================================
 # AL-CIVIL WAREHOUSE MANAGEMENT SYSTEM
 # Android & Termux High-Performance Launcher
 # ==========================================================
 
-DIR="/data/data/com.termux/files/home/al-civil"
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$DIR" || exit 1
 
 PID_FILE="$DIR/.server.pid"

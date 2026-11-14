@@ -5,24 +5,23 @@
 {% block content %}
 <div class="container">
   <!-- Page Header -->
-  <div class="page-header">
+  <div class="page-header page-header-hero">
     <div class="page-title">
+      <span class="page-eyebrow"><span class="live-dot"></span> Warehouse Command Center</span>
       <h2>Ringkasan Gudang AL-CIVIL</h2>
-      <p>Pusat Logistik &amp; Material Teknik Sipil Terpadu</p>
+      <p>Pusat logistik, valuasi aset, dan kendali material teknik sipil dalam satu tampilan eksekutif.</p>
     </div>
     <div class="header-actions">
+      <span class="header-status"><span class="live-dot"></span> <strong>Online</strong> <span class="header-status-divider"></span> Server Lokal</span>
       <a href="{{ url_for('quick_transaction') }}" class="btn btn-accent btn-lg">
-        <span>⚡ Mode Transaksi Cepat</span>
+        <span>⚡ Transaksi Cepat</span>
         <span class="kbd-badge">F2</span>
       </a>
       <a href="{{ url_for('stock_opname') }}" class="btn btn-outline">
-        <span>⚖️ Stock Opname</span>
+        <span>⚖️ Opname</span>
       </a>
       <a href="{{ url_for('backup_view') }}" class="btn btn-outline">
-        <span>💾 Backup Data</span>
-      </a>
-      <a href="{{ url_for('export_materials') }}" class="btn btn-outline">
-        <span>📥 Export CSV</span>
+        <span>💾 Backup</span>
       </a>
     </div>
   </div>
@@ -163,6 +162,9 @@
           <h3>
             <span>📊 Klasifikasi Material Sipil</span>
           </h3>
+          <a href="{{ url_for('export_materials') }}" class="btn btn-outline btn-sm">
+            📥 Export
+          </a>
         </div>
         <div class="card-body" style="padding: 0;">
           <div class="table-responsive" style="border: none;">
@@ -302,16 +304,17 @@
       </div>
 
       <!-- Quick Shortcuts Banner (hide on mobile) -->
-      <div class="no-mobile-tips" style="background: linear-gradient(135deg, #eff6ff, #f0fdf4); border: 1.5px dashed #bfdbfe; border-radius: 10px; padding: 1.25rem;">
-        <h4 style="font-size: 0.95rem; font-weight: 800; color: #1e3a8a; margin-bottom: 0.4rem; display: flex; align-items: center; gap: 0.4rem;">
-          ⚡ Tips Transaksi Cepat Gudang AL-CIVIL
-        </h4>
-        <ul style="font-size: 0.82rem; color: #334155; margin-left: 1.2rem; line-height: 1.6;">
-          <li>Tekan <b>F2</b> kapan saja untuk langsung membuka pencarian material atau scanner barcode.</li>
-          <li>Gunakan pemindai barcode USB/Bluetooth untuk otomatis memasukkan material.</li>
-          <li>Tekan <b>F9</b> untuk langsung memproses dan menerbitkan Surat Jalan resmi.</li>
-          <li>Surat Jalan otomatis tercetak dengan 4 kolom tanda tangan standar proyek teknik sipil.</li>
-        </ul>
+      <div class="no-mobile-tips tip-card">
+        <div class="tip-card-icon" aria-hidden="true">⚡</div>
+        <div>
+          <h4>Tips Transaksi Cepat Gudang AL-CIVIL</h4>
+          <ul>
+            <li>Tekan <b>F2</b> kapan saja untuk langsung membuka pencarian material atau scanner barcode.</li>
+            <li>Gunakan pemindai barcode USB/Bluetooth untuk otomatis memasukkan material.</li>
+            <li>Tekan <b>F9</b> untuk langsung memproses dan menerbitkan Surat Jalan resmi.</li>
+            <li>Surat Jalan otomatis tercetak dengan 4 kolom tanda tangan standar proyek teknik sipil.</li>
+          </ul>
+        </div>
       </div>
     </div>
 

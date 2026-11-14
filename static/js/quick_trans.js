@@ -307,31 +307,31 @@ document.addEventListener('DOMContentLoaded', () => {
       const isOverStock = currentTxType === 'OUT' && item.qty > item.stock;
 
       html += `
-        <tr style="${isOverStock ? 'background-color: #fef2f2;' : ''}">
-          <td>
-            <div style="font-weight: 700; font-size: 0.88rem; color: #0f172a;">${escapeHtml(item.material_name)}</div>
-            <div style="font-size: 0.75rem; color: #64748b;">
+        <tr class="cart-row${isOverStock ? ' is-overstock' : ''}">
+          <td class="cart-cell-desc">
+            <div class="cart-item-name">${escapeHtml(item.material_name)}</div>
+            <div class="cart-item-meta">
               SKU: ${escapeHtml(item.sku)} | Sisa Stok: <b>${item.stock} ${escapeHtml(item.unit)}</b>
               ${isOverStock ? '<span class="badge badge-danger" style="margin-left: 6px;">Melebihi Stok!</span>' : ''}
             </div>
-            <input type="text" class="form-control form-control-sm" style="margin-top: 4px; font-size: 0.75rem; padding: 2px 6px;" 
-                   placeholder="Catatan batch/lot/spesifikasi..." value="${escapeHtml(item.notes || '')}" 
+            <input type="text" class="form-control form-control-sm cart-item-notes"
+                   placeholder="Catatan batch/lot/spesifikasi..." value="${escapeHtml(item.notes || '')}"
                    onchange="window.updateCartItemNotes(${index}, this.value)">
           </td>
-          <td style="width: 145px;">
-            <div style="display: flex; align-items: center; gap: 4px;">
-              <button class="btn btn-outline btn-touch-qty" onclick="window.changeCartQty(${index}, -1)" type="button" style="padding: 0; min-width: 36px; height: 36px; font-weight: 800; font-size: 1.1rem;">-</button>
-              <input type="number" min="0.1" step="any" class="form-control" style="text-align: center; width: 62px; font-weight: 800; padding: 4px 2px; font-size: 0.95rem;" 
+          <td class="cart-cell-qty">
+            <div class="cart-qty-control">
+              <button class="btn btn-outline cart-qty-btn" onclick="window.changeCartQty(${index}, -1)" type="button">-</button>
+              <input type="number" min="0.1" step="any" class="form-control cart-qty-input"
                      value="${item.qty}" onchange="window.setCartQty(${index}, this.value)">
-              <button class="btn btn-outline btn-touch-qty" onclick="window.changeCartQty(${index}, 1)" type="button" style="padding: 0; min-width: 36px; height: 36px; font-weight: 800; font-size: 1.1rem;">+</button>
+              <button class="btn btn-outline cart-qty-btn" onclick="window.changeCartQty(${index}, 1)" type="button">+</button>
             </div>
-            <div style="font-size: 0.72rem; color: #64748b; text-align: center; margin-top: 2px;">${item.unit}</div>
+            <div class="cart-qty-unit">${escapeHtml(item.unit)}</div>
           </td>
-          <td style="width: 110px; text-align: right; font-weight: 600; font-size: 0.85rem;">
+          <td class="cart-cell-total">
             ${formatRupiah(lineTotal)}
           </td>
-          <td style="width: 44px; text-align: center;">
-            <button class="btn btn-outline" style="color: #ef4444; border-color: #fca5a5; width: 36px; height: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1.1rem; border-radius: 8px;" 
+          <td class="cart-cell-action">
+            <button class="btn btn-outline cart-remove-btn"
                     onclick="window.removeCartItem(${index})" title="Hapus">
               ✕
             </button>

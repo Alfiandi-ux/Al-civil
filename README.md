@@ -1,7 +1,7 @@
 # 🏗️ AL-CIVIL WAREHOUSE MANAGEMENT SYSTEM
 **Sistem Gudang & Logistik Material Teknik Sipil Profesional (Server Lokal)**
 
-Aplikasi manajemen pergudangan material konstruksi dan teknik sipil dirancang khusus dengan **tampilan cerah (Bright Professional UI)**, **kinerja tinggi pada server lokal**, dan **Mode Transaksi Cepat (Fast Dispatch & Intake)** berstandar POS/Barcode Scanner.
+Aplikasi manajemen pergudangan material konstruksi dan teknik sipil dirancang khusus dengan **Executive Premium UI** (palet navy–sapphire–gold, tipografi presisi, kartu KPI eksekutif, dan navigasi mobile bergaya aplikasi native), **kinerja tinggi pada server lokal**, serta **Mode Transaksi Cepat (Fast Dispatch & Intake)** berstandar POS/Barcode Scanner.
 
 ---
 
@@ -71,27 +71,59 @@ Aplikasi gudang ini telah dioptimalkan khusus untuk lingkungan **Android & Termu
 
 ---
 
-## 🚀 Cara Menjalankan Server Lokal (Android / Termux)
+## 🚀 Instalasi & Menjalankan Server
 
-Dari direktori mana saja di Termux, cukup ketik:
+### 1. Prasyarat
+- **Python 3.10+**
+- Terminal **Termux** (Android) atau shell Linux/macOS/Windows
+
+### 2. Pasang dependensi
 
 ```bash
-al-civil
+git clone https://github.com/Alfiandi-ux/al-civil.git
+cd al-civil
+pip install -r requirements.txt
 ```
-*(Atau `./start.sh` di dalam folder `al-civil`)*
 
-Perintah ini akan otomatis:
-1. Mengaktifkan anti-sleep Termux
-2. Menjalankan server di latar belakang (*background daemon*)
-3. Otomatis membuka aplikasi di browser Chrome Android Anda
+*(Di Termux, jika `pip` belum ada: `pkg install python`.)*
+
+### 3. Jalankan
+
+**Android / Termux (mode background + buka browser otomatis):**
+
+```bash
+./start.sh start
+```
+
+**Semua platform (foreground):**
+
+```bash
+python3 app.py
+```
+
+Saat pertama kali dijalankan, aplikasi otomatis membuat database `alcivil.db`
+beserta data contoh material sipil, proyek, dan supplier.
+
+### ⚙️ Konfigurasi Environment
+
+Salin `.env.example` menjadi `.env` lalu sesuaikan bila perlu:
+
+| Variabel | Default | Keterangan |
+|---|---|---|
+| `SECRET_KEY` | acak per proses | Kunci sesi Flask. Isi nilai tetap saat deploy publik. |
+| `PORT` | `5000` | Port server lokal. |
+| `DEBUG` | `false` | Aktifkan mode debug Flask (`true`/`false`). |
 
 ### 🕹️ Perintah Manajemen Server Termux:
-- `al-civil` atau `al-civil start` : Menjalankan server & buka browser
-- `al-civil status` : Memeriksa status proses, PID, dan alamat IP
-- `al-civil stop` : Menghentikan server & melepas wake-lock
-- `al-civil restart` : Memulai ulang server
-- `al-civil open` : Membuka browser ke aplikasi
-- `al-civil log` : Melihat log server secara real-time
+- `./start.sh start` : Menjalankan server & buka browser
+- `./start.sh status` : Memeriksa status proses, PID, dan alamat IP
+- `./start.sh stop` : Menghentikan server & melepas wake-lock
+- `./start.sh restart` : Memulai ulang server
+- `./start.sh open` : Membuka browser ke aplikasi
+- `./start.sh log` : Melihat log server secara real-time
+
+> Opsional: tambahkan `alias al-civil='~/al-civil/start.sh'` di `~/.bashrc`
+> agar cukup mengetik `al-civil` dari direktori mana saja.
 
 ### 🌐 Alamat Akses:
 - **Di Browser Perangkat Ini (Lokal):**
@@ -117,21 +149,38 @@ Perintah ini akan otomatis:
 ```
 al-civil/
 ├── app.py                     # Server Flask & REST API
-├── database.py                # Database SQLite & Seed Data Sipil
-├── alcivil.db                 # Database SQLite aktif
-├── start.sh                   # Script peluncur otomatis
+├── database.py                # Skema SQLite & seed data material sipil
+├── requirements.txt           # Dependensi Python
+├── start.sh                   # Script peluncur otomatis (Termux)
+├── .env.example               # Contoh konfigurasi environment
 ├── templates/
-│   ├── base.html              # Template layout dasar & navigasi
+│   ├── base.html              # Layout dasar & navigasi
 │   ├── dashboard.html         # Ringkasan KPI & grafik status
 │   ├── quick_transaction.html # MODE TRANSAKSI CEPAT (POS System)
-│   ├── inventory.html         # Master Material & filter stok
-│   ├── transactions.html      # Riwayat Surat Jalan & transaksi
-│   ├── slip.html              # Template cetak Surat Jalan resmi
-│   ├── projects.html          # Data Proyek & Mitra Supplier
-│   └── stock_opname.html      # Form audit fisik & selisih stok
+│   ├── inventory.html         # Master material & filter stok
+│   ├── transactions.html      # Riwayat surat jalan & transaksi
+│   ├── slip.html              # Template cetak surat jalan resmi
+│   ├── projects.html          # Data proyek & mitra supplier
+│   ├── stock_opname.html      # Form audit fisik & selisih stok
+│   └── backup.html            # Backup, restore & migrasi data
 └── static/
-    ├── css/style.css          # Desain cerah modern & cetak
-    └── js/
-        ├── app.js             # Toast & helper modal
-        └── quick_trans.js     # Engine transaksi cepat & shortcut
+    ├── css/style.css          # Desain dasar & tata letak
+    ├── css/premium.css        # Tema Executive Premium UI
+    ├── js/app.js              # Toast & helper modal
+    ├── js/quick_trans.js      # Engine transaksi cepat & shortcut
+    ├── icons/                 # Ikon PWA (SVG, 192px, 512px)
+    ├── manifest.json          # Manifest PWA
+    └── sw.js                  # Service worker (cache offline)
 ```
+
+**Dibuat otomatis saat runtime (tidak ikut Git):** `alcivil.db`,
+`alcivil.db-wal`, `alcivil.db-shm`, `backups/`, `server.log`, `.server.pid`.
+
+---
+
+## 🤝 Kontribusi
+
+1. Fork repositori ini.
+2. Buat branch fitur: `git checkout -b fitur/nama-fitur`.
+3. Commit perubahan: `git commit -m "feat: deskripsi singkat"`.
+4. Push branch dan buka Pull Request.

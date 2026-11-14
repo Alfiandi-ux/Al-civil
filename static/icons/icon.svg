@@ -1,23 +1,26 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#1e3a8a"/>
-      <stop offset="100%" stop-color="#2563eb"/>
+      <stop offset="0%" stop-color="#1c347f"/>
+      <stop offset="52%" stop-color="#101a33"/>
+      <stop offset="100%" stop-color="#070b15"/>
     </linearGradient>
     <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#f59e0b"/>
-      <stop offset="100%" stop-color="#fbbf24"/>
+      <stop offset="0%" stop-color="#f4d79c"/>
+      <stop offset="50%" stop-color="#d9a94a"/>
+      <stop offset="100%" stop-color="#b78226"/>
+    </linearGradient>
+    <linearGradient id="sapphire" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6f8dff"/>
+      <stop offset="100%" stop-color="#2f5cff"/>
     </linearGradient>
   </defs>
-  <!-- Background Rounded Rect -->
-  <rect width="512" height="512" rx="110" fill="url(#bg)"/>
-  <!-- Gold Border Accent -->
-  <rect x="20" y="20" width="472" height="472" rx="95" fill="none" stroke="url(#gold)" stroke-width="14" opacity="0.85"/>
-  <!-- Crane / Warehouse Symbol -->
-  <path d="M 120 380 L 120 180 L 320 180 L 320 230 L 260 230 L 260 380 Z" fill="#ffffff" opacity="0.15"/>
-  <!-- Bold Text AL -->
-  <text x="256" y="315" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="190" font-weight="900" fill="#ffffff" text-anchor="middle" letter-spacing="-4">AL</text>
-  <!-- Civil Engineering Tag -->
-  <rect x="136" y="355" width="240" height="42" rx="10" fill="#f59e0b"/>
-  <text x="256" y="384" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="22" font-weight="800" fill="#0f172a" text-anchor="middle" letter-spacing="3">CIVIL WMS</text>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect x="22" y="22" width="468" height="468" rx="96" fill="none" stroke="url(#gold)" stroke-width="10" opacity="0.9"/>
+  <circle cx="388" cy="124" r="52" fill="url(#sapphire)" opacity="0.22"/>
+  <circle cx="388" cy="124" r="18" fill="url(#sapphire)" opacity="0.7"/>
+  <path d="M 116 382 L 116 190 L 320 190 L 320 238 L 258 238 L 258 382 Z" fill="#ffffff" opacity="0.08"/>
+  <text x="256" y="318" font-family="Sora, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="176" font-weight="700" fill="#ffffff" text-anchor="middle" letter-spacing="-6">AL</text>
+  <rect x="138" y="354" width="236" height="40" rx="10" fill="url(#gold)"/>
+  <text x="256" y="382" font-family="Sora, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="21" font-weight="700" fill="#1a1204" text-anchor="middle" letter-spacing="4">CIVIL WMS</text>
 </svg>

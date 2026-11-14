@@ -1,15 +1,29 @@
 # Database SQLite & Backups (Kerahasiaan Data)
 *.db
+*.db-wal
+*.db-shm
 *.sqlite3
 backups/
 downloads/
 
 # Server Runtime & Logs
 server.log
+*.log
 .server.pid
 __pycache__/
 *.py[cod]
+.pytest_cache/
+
+# Virtual environment
+.venv/
+venv/
+env/
 
 # Environment variables & local secrets
 .env
 .env.local
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+*.swp
