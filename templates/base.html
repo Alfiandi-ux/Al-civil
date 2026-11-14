@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="AL-CIVIL">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='icons/icon.svg') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192.png') }}">
+  <title>{% block title %}AL-CIVIL{% endblock %} | Sistem Gudang Sipil &amp; Konstruksi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=8) }}">
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+  <!-- ===== TOP NAVBAR ===== -->
+  <header class="navbar no-print">
+    <div class="container nav-container">
+      <a href="{{ url_for('dashboard') }}" class="brand">
+        <div class="brand-icon">AL</div>
+        <div class="brand-text">
+          <h1>AL-CIVIL</h1>
+          <span>Civil Engineering WMS</span>
+        </div>
+      </a>
+
+      <!-- Desktop Navigation Links -->
+      <nav class="desktop-nav">
+        <ul class="nav-links">
+          <li>
+            <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
+              <span>📊</span> Dashboard
+            </a>
+          </li>
+          <li>
+            <a href="{{ url_for('quick_transaction') }}" class="nav-quick-btn">
+              <span>⚡</span> Transaksi Cepat
+              <span class="kbd-badge">F2</span>
+            </a>
+          </li>
+          <li>
+            <a href="{{ url_for('inventory') }}" class="nav-link {% if request.endpoint == 'inventory' %}active{% endif %}">
+              <span>📦</span> Master Material
+              {% if critical_count > 0 %}
+                <span class="badge badge-danger" style="font-size: 0.65rem; padding: 1px 7px; border-radius: 999px;">{{ critical_count }}</span>
+              {% endif %}
+            </a>
+          </li>
+          <li>
+            <a href="{{ url_for('transactions') }}" class="nav-link {% if request.endpoint in ['transactions', 'view_slip'] %}active{% endif %}">
+              <span>📄</span> Surat Jalan
+            </a>
+          </li>
+          <li>
+            <a href="{{ url_for('projects') }}" class="nav-link {% if request.endpoint == 'projects' %}active{% endif %}">
+              <span>🏗️</span> Proyek &amp; Vendor
+            </a>
+          </li>
+          <li>
+            <a href="{{ url_for('stock_opname') }}" class="nav-link {% if request.endpoint == 'stock_opname' %}active{% endif %}">
+              <span>⚖️</span> Stock Opname
+            </a>
+          </li>
+          <li>
+            <a href="{{ url_for('backup_view') }}" class="nav-link {% if request.endpoint == 'backup_view' %}active{% endif %}">
+              <span>💾</span> Backup &amp; Migrasi
+            </a>
+          </li>
+        </ul>
+      </nav>
+
+      <!-- Mobile Top Quick Action -->
+      <div class="mobile-top-action">
+        <a href="{{ url_for('quick_transaction') }}" class="btn btn-accent btn-sm">
+          ⚡ Transaksi
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== FLASH MESSAGES ===== -->
+  <div class="container no-print" style="margin-top: 1rem;">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="flash-alert flash-{{ category }}" id="flashMsg{{ loop.index }}">
+            <div style="display: flex; align-items: center; gap: 0.6rem;">
+              <span style="font-size: 1.1rem;">
+                {% if category == 'success' %}✅{% elif category == 'danger' %}⚠️{% else %}ℹ️{% endif %}
+              </span>
+              <span>{{ message }}</span>
+            </div>
+            <button onclick="this.parentElement.remove()" style="background: none; border: none; font-size: 1.1rem; cursor: pointer; color: inherit; opacity: 0.7; flex-shrink: 0; padding: 0.1rem;" aria-label="Tutup">×</button>
+          </div>
+        {% endfor %}
+        <script>
+          // Auto dismiss flash messages after 5s
+          setTimeout(() => {
+            document.querySelectorAll('.flash-alert').forEach(el => {
+              el.style.transition = 'opacity 0.5s ease, transform 0.5s ease, margin 0.5s ease';
+              el.style.opacity = '0';
+              el.style.transform = 'translateY(-8px)';
+              setTimeout(() => el.remove(), 500);
+            });
+          }, 5000);
+        </script>
+      {% endif %}
+    {% endwith %}
+  </div>
+
+  <!-- ===== MAIN CONTENT ===== -->
+  <main class="main-content">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- ===== MOBILE BOTTOM NAVIGATION ===== -->
+  <nav class="mobile-bottom-nav no-print" id="mobileBottomNav">
+    <a href="{{ url_for('dashboard') }}" class="mobile-nav-item {% if request.endpoint == 'dashboard' %}active{% endif %}">
+      <span class="mobile-nav-icon">📊</span>
+      <span class="mobile-nav-label">Dashboard</span>
+    </a>
+    <a href="{{ url_for('inventory') }}" class="mobile-nav-item {% if request.endpoint == 'inventory' %}active{% endif %}">
+      <div style="position: relative; display: inline-block;">
+        <span class="mobile-nav-icon">📦</span>
+        {% if critical_count > 0 %}
+          <span class="mobile-nav-badge">{{ critical_count }}</span>
+        {% endif %}
+      </div>
+      <span class="mobile-nav-label">Material</span>
+    </a>
+    <a href="{{ url_for('quick_transaction') }}" class="mobile-nav-action-btn {% if request.endpoint == 'quick_transaction' %}active{% endif %}" title="Transaksi Cepat">
+      <div class="mobile-action-circle"><span>⚡</span></div>
+      <span class="mobile-nav-label" style="font-size: 0.6rem;">Transaksi</span>
+    </a>
+    <a href="{{ url_for('transactions') }}" class="mobile-nav-item {% if request.endpoint in ['transactions', 'view_slip'] %}active{% endif %}">
+      <span class="mobile-nav-icon">📄</span>
+      <span class="mobile-nav-label">Surat Jalan</span>
+    </a>
+    <button type="button" class="mobile-nav-item" onclick="toggleMobileMenu()" id="btnMobileMenu" style="background:none; border:none; cursor:pointer; font-family: inherit;">
+      <span class="mobile-nav-icon" id="menuIconEl">☰</span>
+      <span class="mobile-nav-label">Menu</span>
+    </button>
+  </nav>
+
+  <!-- ===== MOBILE SLIDE-UP DRAWER ===== -->
+  <div class="mobile-drawer-overlay no-print" id="mobileDrawerOverlay" onclick="toggleMobileMenu(false)"></div>
+  <div class="mobile-drawer no-print" id="mobileDrawer">
+    <div class="mobile-drawer-header">
+      <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <div class="brand-icon" style="width: 36px; height: 36px; font-size: 0.9rem; border-radius: 8px;">AL</div>
+        <div>
+          <div style="font-weight: 800; font-size: 0.95rem; color: var(--text-main);">Menu Lanjutan</div>
+          <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 600;">AL-CIVIL WMS</div>
+        </div>
+      </div>
+      <button class="modal-close" onclick="toggleMobileMenu(false)">×</button>
+    </div>
+    <div class="mobile-drawer-body">
+      <a href="{{ url_for('projects') }}" class="mobile-drawer-link {% if request.endpoint == 'projects' %}active{% endif %}">
+        <span class="drawer-icon">🏗️</span>
+        <div>
+          <div class="drawer-title">Proyek &amp; Rekanan Vendor</div>
+          <div class="drawer-desc">Daftar site proyek &amp; mitra supplier</div>
+        </div>
+      </a>
+      <a href="{{ url_for('stock_opname') }}" class="mobile-drawer-link {% if request.endpoint == 'stock_opname' %}active{% endif %}">
+        <span class="drawer-icon">⚖️</span>
+        <div>
+          <div class="drawer-title">Stock Opname &amp; Audit Fisik</div>
+          <div class="drawer-desc">Penyelarasan stok &amp; audit selisih gudang</div>
+        </div>
+      </a>
+      <a href="{{ url_for('backup_view') }}" class="mobile-drawer-link {% if request.endpoint == 'backup_view' %}active{% endif %}">
+        <span class="drawer-icon">💾</span>
+        <div>
+          <div class="drawer-title">Backup &amp; Migrasi Data</div>
+          <div class="drawer-desc">Unduh / impor database saat pindah HP &amp; Termux</div>
+        </div>
+      </a>
+      <a href="{{ url_for('export_materials') }}" class="mobile-drawer-link">
+        <span class="drawer-icon">📥</span>
+        <div>
+          <div class="drawer-title">Export Master Material (CSV)</div>
+          <div class="drawer-desc">Unduh inventaris &amp; valuasi aset gudang</div>
+        </div>
+      </a>
+      <a href="{{ url_for('export_transactions') }}" class="mobile-drawer-link">
+        <span class="drawer-icon">📋</span>
+        <div>
+          <div class="drawer-title">Export Log Surat Jalan (CSV)</div>
+          <div class="drawer-desc">Unduh riwayat transaksi &amp; muatan material</div>
+        </div>
+      </a>
+    </div>
+    <div class="mobile-drawer-footer">
+      <div style="font-size: 0.75rem; color: #10b981; font-weight: 700; display: flex; align-items: center; gap: 0.4rem;">
+        <span style="display: inline-block; width: 7px; height: 7px; background: #10b981; border-radius: 50%;"></span>
+        Server Lokal Termux Aktif (Port 5000)
+      </div>
+      <div style="margin-top: 5px; font-size: 0.7rem; color: #475569; line-height: 1.4;">
+        💡 Tap menu Chrome → <b>Tambahkan ke Layar Utama</b> untuk mode layar penuh (PWA).
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== FOOTER ===== -->
+  <footer class="footer no-print">
+    <div class="container footer-content">
+      <div style="display: flex; align-items: center; gap: 0.6rem; color: #475569;">
+        <div class="brand-icon" style="width: 24px; height: 24px; font-size: 0.6rem; border-radius: 5px; border-width: 1px;">AL</div>
+        <strong style="color: #64748b;">AL-CIVIL WMS</strong>
+        <span>• Server Lokal Termux Aktif</span>
+      </div>
+      <div style="display: flex; gap: 1rem; align-items: center; color: #475569; font-size: 0.75rem;">
+        <span>
+          <kbd class="kbd-badge" style="background: rgba(255,255,255,0.1); color: #94a3b8;">F2</kbd> Transaksi Cepat &bull;
+          <kbd class="kbd-badge" style="background: rgba(255,255,255,0.1); color: #94a3b8;">F9</kbd> Simpan
+        </span>
+        <span>&copy; {{ current_year }} AL-CIVIL Engineering</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ===== TOAST NOTIFICATION CONTAINER ===== -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script src="{{ url_for('static', filename='js/app.js', v=8) }}"></script>
+  <script>
+    // Register PWA Service Worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(err => {
+          console.warn('SW register error:', err);
+        });
+      });
+    }
+
+    // Mobile Drawer Toggle
+    function toggleMobileMenu(forceClose) {
+      const drawer = document.getElementById('mobileDrawer');
+      const overlay = document.getElementById('mobileDrawerOverlay');
+      const menuIcon = document.getElementById('menuIconEl');
+      const isOpen = drawer.classList.contains('open');
+
+      if (forceClose === false || isOpen) {
+        drawer.classList.remove('open');
+        overlay.classList.remove('open');
+        if (menuIcon) menuIcon.textContent = '☰';
+      } else {
+        drawer.classList.add('open');
+        overlay.classList.add('open');
+        if (menuIcon) menuIcon.textContent = '✕';
+      }
+    }
+  </script>
+  {% block extra_scripts %}{% endblock %}
+</body>
+</html>

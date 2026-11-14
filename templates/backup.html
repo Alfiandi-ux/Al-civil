@@ -1,0 +1,400 @@
+{% extends 'base.html' %}
+
+{% block title %}Backup &amp; Migrasi Data | AL-CIVIL WAREHOUSE{% endblock %}
+
+{% block content %}
+<div class="container">
+  
+  <!-- Page Header -->
+  <div class="page-header">
+    <div class="page-title">
+      <h2>💾 Backup &amp; Migrasi Data</h2>
+      <p>Unduh salinan database utuh, buat snapshot lokal, atau impor data saat berpindah server maupun perangkat Termux.</p>
+    </div>
+    <div class="header-actions">
+      <a href="{{ url_for('backup_download_db') }}" class="btn btn-primary">
+        <span>📥 Download Database (.db)</span>
+      </a>
+      <a href="{{ url_for('backup_download_json') }}" class="btn btn-outline">
+        <span>📄 Export JSON</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Database Stats KPI Cards -->
+  <div class="kpi-grid">
+    <div class="kpi-card kpi-blue">
+      <div class="kpi-content">
+        <div class="kpi-label">Ukuran Database</div>
+        <div class="kpi-value kpi-value-sm">{{ stats.file_size_formatted }}</div>
+        <div class="kpi-sub">
+          <span class="badge" style="background: rgba(255,255,255,0.22); color: #fff; border: 1px solid rgba(255,255,255,0.35);">SQLite WAL Mode</span>
+        </div>
+      </div>
+      <div class="kpi-icon">🗄️</div>
+    </div>
+
+    <div class="kpi-card kpi-emerald">
+      <div class="kpi-content">
+        <div class="kpi-label">Master Material (SKU)</div>
+        <div class="kpi-value">{{ stats.materials_count }}</div>
+        <div class="kpi-sub">
+          <span class="badge" style="background: rgba(255,255,255,0.22); color: #fff; border: 1px solid rgba(255,255,255,0.35);">Katalog Aktif</span>
+        </div>
+      </div>
+      <div class="kpi-icon">📦</div>
+    </div>
+
+    <div class="kpi-card kpi-amber">
+      <div class="kpi-content">
+        <div class="kpi-label">Total Transaksi / SJ</div>
+        <div class="kpi-value">{{ stats.transactions_count }}</div>
+        <div class="kpi-sub">
+          <span class="badge" style="background: rgba(255,255,255,0.22); color: #fff; border: 1px solid rgba(255,255,255,0.35);">{{ stats.transaction_items_count }} Item Muatan</span>
+        </div>
+      </div>
+      <div class="kpi-icon">📄</div>
+    </div>
+
+    <div class="kpi-card kpi-rose">
+      <div class="kpi-content">
+        <div class="kpi-label">Proyek &amp; Supplier</div>
+        <div class="kpi-value">{{ stats.projects_count + stats.suppliers_count }}</div>
+        <div class="kpi-sub">
+          <span class="badge" style="background: rgba(255,255,255,0.25); color: #fff;">{{ stats.projects_count }} Site &bull; {{ stats.suppliers_count }} Vendor</span>
+        </div>
+      </div>
+      <div class="kpi-icon">🏗️</div>
+    </div>
+  </div>
+
+  <!-- Dual Split: Export vs Import -->
+  <div class="split-grid-dashboard">
+    
+    <!-- LEFT PANEL: Export Options & Termux Migration Guide -->
+    <div>
+      <div class="card">
+        <div class="card-header">
+          <h3>
+            <span>📤 Buat &amp; Unduh Backup</span>
+          </h3>
+          <span class="badge badge-success">Sistem Online</span>
+        </div>
+        <div class="card-body">
+          <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1.25rem;">
+            Pilih format cadangan data sesuai kebutuhan migrasi Anda:
+          </p>
+
+          <div style="display: flex; flex-direction: column; gap: 0.85rem; margin-bottom: 1.5rem;">
+            <!-- Option 1: Full SQLite DB -->
+            <a href="{{ url_for('backup_download_db') }}" class="btn btn-primary btn-lg" style="justify-content: flex-start; padding: 1rem 1.25rem; text-align: left;">
+              <span style="font-size: 1.5rem; margin-right: 0.5rem;">💾</span>
+              <div>
+                <div style="font-size: 0.95rem; font-weight: 800;">Download Database Utuh (.db)</div>
+                <div style="font-size: 0.76rem; font-weight: 500; opacity: 0.9; margin-top: 2px;">
+                  Direkomendasikan untuk pindah HP / Termux baru (100% lengkap tanpa data terpotong)
+                </div>
+              </div>
+            </a>
+
+            <!-- Option 2: JSON Backup -->
+            <a href="{{ url_for('backup_download_json') }}" class="btn btn-outline btn-lg" style="justify-content: flex-start; padding: 1rem 1.25rem; text-align: left;">
+              <span style="font-size: 1.5rem; margin-right: 0.5rem;">📄</span>
+              <div>
+                <div style="font-size: 0.95rem; font-weight: 800; color: var(--text-main);">Download Format JSON (.json)</div>
+                <div style="font-size: 0.76rem; font-weight: 500; color: var(--text-muted); margin-top: 2px;">
+                  Format teks portabel, bisa dibuka di aplikasi spreadsheet atau editor teks
+                </div>
+              </div>
+            </a>
+
+            <!-- Option 3: Create Snapshot on Server -->
+            <form method="POST" action="{{ url_for('backup_create') }}" style="margin: 0;">
+              <button type="submit" class="btn btn-outline" style="width: 100%; justify-content: center; padding: 0.75rem 1rem;">
+                <span>📸 Buat Snapshot Cadangan di Server Lokal</span>
+              </button>
+            </form>
+          </div>
+
+          <!-- Migration Guide Box -->
+          <div style="background: linear-gradient(135deg, #eff6ff, #f0fdf4); border: 1.5px dashed #bfdbfe; border-radius: 12px; padding: 1.25rem;">
+            <h4 style="font-size: 0.95rem; font-weight: 800; color: #1e3a8a; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.45rem;">
+              <span>📲 Cara Pindah Data ke HP / Termux Baru</span>
+            </h4>
+            <ol style="font-size: 0.82rem; color: #334155; margin-left: 1.25rem; line-height: 1.6;">
+              <li>Klik tombol <b>Download Database Utuh (.db)</b> di atas pada HP lama Anda. File akan tersimpan di folder Download HP.</li>
+              <li>Kirim file <code>.db</code> tersebut ke HP baru (via WhatsApp, Google Drive, ShareIt, atau kabel USB).</li>
+              <li>Jalankan server AL-CIVIL di HP baru (<code>./start.sh start</code>) lalu buka browser ke menu ini (<b>Backup &amp; Migrasi Data</b>).</li>
+              <li>Pilih file <code>.db</code> yang tadi dikirim pada form <b>Impor Data</b> di samping kanan, lalu klik <b>Impor &amp; Pulihkan Database</b>.</li>
+              <li>Selesai! Seluruh stok barang, riwayat surat jalan, data proyek, dan konfigurasi otomatis berpindah utuh.</li>
+            </ol>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL: Import / Restore Form -->
+    <div>
+      <div class="card">
+        <div class="card-header">
+          <h3>
+            <span>📥 Impor &amp; Pulihkan Data (Restore)</span>
+          </h3>
+          <span class="badge badge-warning">Aksi Sensitif</span>
+        </div>
+        <div class="card-body">
+          <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1.25rem;">
+            Unggah file backup hasil ekspor AL-CIVIL (mendukung format <b>.db</b> SQLite dan <b>.json</b>).
+          </p>
+
+          <form method="POST" action="{{ url_for('backup_import') }}" enctype="multipart/form-data" id="importBackupForm">
+            <!-- File Input Area -->
+            <div class="form-group">
+              <label class="form-label">Pilih File Backup (*.db / *.json)</label>
+              <div style="border: 2px dashed var(--border-darker); border-radius: var(--radius-md); padding: 1.75rem 1.25rem; text-align: center; background: #fafcff; transition: all 0.2s;" id="dropZoneArea">
+                <div style="font-size: 2.2rem; margin-bottom: 0.5rem;">📂</div>
+                <div style="font-weight: 700; font-size: 0.92rem; color: var(--text-main); margin-bottom: 0.25rem;">
+                  Klik untuk memilih file atau seret file ke sini
+                </div>
+                <div style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 1rem;">
+                  Menerima file <b>.db</b>, <b>.sqlite</b>, atau <b>.json</b>
+                </div>
+                <input type="file" name="backup_file" id="backupFileInput" accept=".db,.sqlite,.sqlite3,.json" required style="display: none;" onchange="handleFileSelected(this)">
+                <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('backupFileInput').click()">
+                  🔍 Telusuri File
+                </button>
+                <div id="selectedFileNameDisplay" style="margin-top: 0.75rem; font-size: 0.85rem; font-weight: 800; color: var(--primary-text); display: none;"></div>
+              </div>
+            </div>
+
+            <!-- Import Mode for JSON -->
+            <div class="form-group" id="jsonModeGroup" style="display: none;">
+              <label class="form-label">Mode Impor (Khusus JSON)</label>
+              <select name="import_mode" class="form-select">
+                <option value="replace" selected>Ganti Penuh (Replace) - Bersihkan data lama dan pasang data backup</option>
+                <option value="merge">Gabungkan (Merge) - Tambahkan/perbarui tanpa menghapus data lain</option>
+              </select>
+            </div>
+
+            <!-- Safety Auto-Backup Note -->
+            <div style="display: flex; align-items: flex-start; gap: 0.6rem; background: #fef3c7; border: 1px solid #fde68a; border-radius: 8px; padding: 0.85rem; margin-bottom: 1.25rem; font-size: 0.8rem; color: #92400e;">
+              <span style="font-size: 1.1rem; line-height: 1;">🛡️</span>
+              <div>
+                <strong>Perlindungan Data Otomatis:</strong> Sebelum proses restore dijalankan, sistem akan otomatis membuat salinan darurat (<i>safety snapshot</i>) dari database saat ini.
+              </div>
+            </div>
+
+            <button type="button" class="btn btn-accent btn-lg" style="width: 100%; justify-content: center;" onclick="confirmRestoreSubmit()">
+              <span>⚡ Impor &amp; Pulihkan Database Sekarang</span>
+            </button>
+          </form>
+
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Local Backups History Table -->
+  <div class="card">
+    <div class="card-header">
+      <h3>
+        <span>🗂️ Arsip Snapshot Backup di Server Lokal</span>
+      </h3>
+      <span class="badge badge-neutral">{{ backups|length }} File Tersimpan</span>
+    </div>
+    <div class="card-body" style="padding: 0;">
+      {% if backups %}
+        <div class="table-responsive desktop-table-view" style="border: none;">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Nama File Backup</th>
+                <th>Tipe</th>
+                <th>Ukuran</th>
+                <th>Tanggal Dibuat</th>
+                <th style="text-align: right;">Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for b in backups %}
+                <tr>
+                  <td>
+                    <div style="font-weight: 800; color: var(--text-main); display: flex; align-items: center; gap: 0.4rem;">
+                      <span>{% if b.filename.endswith('.db') %}🗄️{% else %}📄{% endif %}</span>
+                      <span>{{ b.filename }}</span>
+                      {% if b.is_auto %}
+                        <span class="badge badge-warning" style="font-size: 0.6rem; padding: 2px 6px;">Auto-Safety</span>
+                      {% endif %}
+                    </div>
+                  </td>
+                  <td>
+                    <span class="badge {% if b.filename.endswith('.db') %}badge-primary{% else %}badge-info{% endif %}">
+                      {{ b.type }}
+                    </span>
+                  </td>
+                  <td style="font-weight: 700; color: var(--text-secondary);">{{ b.size_formatted }}</td>
+                  <td style="color: var(--text-muted); font-size: 0.82rem;">{{ b.modified_at }}</td>
+                  <td style="text-align: right;">
+                    <div style="display: flex; gap: 0.4rem; justify-content: flex-end;">
+                      <a href="{{ url_for('backup_download_file', filename=b.filename) }}" class="btn btn-outline btn-sm" title="Unduh ke HP / Komputer">
+                        📥 Unduh
+                      </a>
+                      <button type="button" class="btn btn-accent btn-sm" onclick="confirmLocalRestore('{{ b.filename }}')" title="Pulihkan database dari file ini">
+                        ↺ Pulihkan
+                      </button>
+                      <button type="button" class="btn btn-outline btn-sm" style="color: #ef4444;" onclick="confirmLocalDelete('{{ b.filename }}')" title="Hapus file">
+                        🗑️
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Mobile Card View -->
+        <div class="mobile-card-view" style="padding: 0.75rem;">
+          {% for b in backups %}
+            <div class="mobile-card">
+              <div class="mobile-card-header">
+                <div>
+                  <div class="mobile-card-title" style="word-break: break-all;">{{ b.filename }}</div>
+                  <div class="mobile-card-subtitle">{{ b.modified_at }} &bull; {{ b.size_formatted }}</div>
+                </div>
+                <span class="badge {% if b.filename.endswith('.db') %}badge-primary{% else %}badge-info{% endif %}">
+                  {{ b.type }}
+                </span>
+              </div>
+              <div class="mobile-card-footer" style="justify-content: flex-end;">
+                <a href="{{ url_for('backup_download_file', filename=b.filename) }}" class="btn btn-outline btn-sm">
+                  📥 Unduh
+                </a>
+                <button type="button" class="btn btn-accent btn-sm" onclick="confirmLocalRestore('{{ b.filename }}')">
+                  ↺ Pulihkan
+                </button>
+                <button type="button" class="btn btn-outline btn-sm" style="color: #ef4444;" onclick="confirmLocalDelete('{{ b.filename }}')">
+                  🗑️
+                </button>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div style="padding: 3rem 1rem; text-align: center; color: var(--text-muted);">
+          <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📁</div>
+          <p style="font-size: 0.95rem; font-weight: 700; color: var(--text-main);">Belum ada snapshot backup tersimpan di server</p>
+          <p style="font-size: 0.8rem;">Klik tombol "Buat Snapshot Cadangan di Server Lokal" di atas untuk menyimpan salinan langsung.</p>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+<!-- Hidden action forms for local restore and delete -->
+<form id="actionRestoreForm" method="POST" style="display: none;"></form>
+<form id="actionDeleteForm" method="POST" style="display: none;"></form>
+
+<!-- Confirmation Modal -->
+<div id="confirmRestoreModal" class="modal-overlay">
+  <div class="modal-card" style="max-width: 460px; text-align: center;">
+    <div style="padding: 1.75rem 1.5rem;">
+      <div style="width: 58px; height: 58px; border-radius: 50%; background: #fef3c7; color: #d97706; font-size: 1.8rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem auto; border: 2px solid #fde68a;">
+        ⚠️
+      </div>
+      <h3 style="font-size: 1.2rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.4rem;" id="modalConfirmTitle">
+        Konfirmasi Pemulihan Database
+      </h3>
+      <p style="color: var(--text-secondary); font-size: 0.88rem; margin-bottom: 1.25rem; line-height: 1.5;" id="modalConfirmMessage">
+        Apakah Anda yakin ingin memulihkan database? Data transaksi dan material saat ini akan digantikan oleh isi file backup.
+      </p>
+      <div style="display: flex; gap: 0.75rem; justify-content: center;">
+        <button type="button" class="btn btn-outline" onclick="closeModal('confirmRestoreModal')">
+          Batal
+        </button>
+        <button type="button" class="btn btn-danger" id="btnModalExecute">
+          Ya, Lanjutkan Pulihkan
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  function handleFileSelected(input) {
+    const file = input.files[0];
+    const display = document.getElementById('selectedFileNameDisplay');
+    const jsonMode = document.getElementById('jsonModeGroup');
+    const dropArea = document.getElementById('dropZoneArea');
+
+    if (file) {
+      display.style.display = 'block';
+      display.textContent = `✓ File Terpilih: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+      dropArea.style.borderColor = 'var(--primary)';
+      dropArea.style.background = '#f0f7ff';
+
+      if (file.name.toLowerCase().endsWith('.json')) {
+        jsonMode.style.display = 'block';
+      } else {
+        jsonMode.style.display = 'none';
+      }
+    } else {
+      display.style.display = 'none';
+      dropArea.style.borderColor = 'var(--border-darker)';
+      dropArea.style.background = '#fafcff';
+      jsonMode.style.display = 'none';
+    }
+  }
+
+  function confirmRestoreSubmit() {
+    const input = document.getElementById('backupFileInput');
+    if (!input.files || input.files.length === 0) {
+      alert('Silakan pilih file backup (.db atau .json) terlebih dahulu.');
+      return;
+    }
+
+    const fileName = input.files[0].name;
+    document.getElementById('modalConfirmTitle').textContent = 'Konfirmasi Impor Data';
+    document.getElementById('modalConfirmMessage').textContent = 
+      `Apakah Anda yakin ingin mengimpor "${fileName}"? Sistem akan menggantikan data sesuai isi file backup (snapshot pengaman otomatis dibuat sebelum proses).`;
+
+    const btnExec = document.getElementById('btnModalExecute');
+    btnExec.onclick = function() {
+      closeModal('confirmRestoreModal');
+      document.getElementById('importBackupForm').submit();
+    };
+
+    openModal('confirmRestoreModal');
+  }
+
+  function confirmLocalRestore(filename) {
+    document.getElementById('modalConfirmTitle').textContent = 'Pulihkan dari Snapshot Lokal';
+    document.getElementById('modalConfirmMessage').textContent = 
+      `Apakah Anda yakin ingin memulihkan database dari file snapshot "${filename}"?`;
+
+    const btnExec = document.getElementById('btnModalExecute');
+    btnExec.onclick = function() {
+      closeModal('confirmRestoreModal');
+      const form = document.getElementById('actionRestoreForm');
+      form.action = `/backup/restore/${encodeURIComponent(filename)}`;
+      form.submit();
+    };
+
+    openModal('confirmRestoreModal');
+  }
+
+  function confirmLocalDelete(filename) {
+    if (confirm(`Hapus file backup "${filename}" dari server lokal?`)) {
+      const form = document.getElementById('actionDeleteForm');
+      form.action = `/backup/delete/${encodeURIComponent(filename)}`;
+      form.submit();
+    }
+  }
+</script>
+{% endblock %}

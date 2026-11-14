@@ -1,0 +1,52 @@
+{
+  "name": "AL-CIVIL Warehouse Management System",
+  "short_name": "AL-CIVIL",
+  "description": "Sistem Manajemen Gudang & Logistik Material Teknik Sipil",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/static/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Transaksi Cepat",
+      "short_name": "Transaksi",
+      "description": "Buka Mode POS Transaksi Cepat",
+      "url": "/transaksi-cepat",
+      "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Master Material",
+      "short_name": "Material",
+      "description": "Lihat Stok & Master Material Sipil",
+      "url": "/inventory",
+      "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Surat Jalan",
+      "short_name": "Surat Jalan",
+      "description": "Daftar Surat Jalan & Riwayat Pengiriman",
+      "url": "/transaksi",
+      "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

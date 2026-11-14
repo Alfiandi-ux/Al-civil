@@ -1,0 +1,200 @@
+{% extends 'base.html' %}
+
+{% block title %}Surat Jalan {{ tx.transaction_number }} | AL-CIVIL{% endblock %}
+
+{% block extra_head %}
+<style>
+  @media print {
+    body { font-size: 10pt !important; }
+    .slip-box { border: none !important; border-radius: 0 !important; box-shadow: none !important; padding: 0 !important; }
+    .slip-header { border-bottom: 2px solid #000 !important; }
+    .slip-sign-box { border: 1px solid #000 !important; background: #fff !important; }
+    .table { font-size: 9pt !important; }
+    .table thead th { background: #e5e7eb !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    .table tbody tr:nth-child(even) { background: #f9fafb !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container slip-container">
+  
+  <!-- Action Bar (Hidden when printing) -->
+  <div class="slip-action-bar no-print">
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+      <a href="{{ url_for('transactions') }}" class="btn btn-outline">
+        ← Kembali ke Riwayat
+      </a>
+      <a href="{{ url_for('quick_transaction') }}" class="btn btn-accent">
+        ⚡ Transaksi Baru
+      </a>
+    </div>
+    <div>
+      <button class="btn btn-primary btn-lg" onclick="window.print()">
+        🖨️ Cetak Surat Jalan
+      </button>
+    </div>
+  </div>
+
+  <!-- Printable Slip Container -->
+  <div class="slip-box">
+    
+    <!-- Slip Header -->
+    <div class="slip-header">
+      <div class="slip-company">
+        <div style="display: flex; align-items: center; gap: 0.85rem;">
+          <div style="background: linear-gradient(135deg, #1d4ed8, #2563eb); color: #fff; width: 52px; height: 52px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 1.3rem; border: 2px solid #f59e0b; flex-shrink: 0; letter-spacing: -0.5px;">
+            AL
+          </div>
+          <div>
+            <h2 style="font-size: 1.35rem; font-weight: 900; color: #0f172a; letter-spacing: -0.02em;">AL-CIVIL WAREHOUSE</h2>
+            <div style="font-size: 0.75rem; color: #475569; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin-top: 2px;">
+              Civil Engineering Logistics &amp; Central Supply Depot
+            </div>
+          </div>
+        </div>
+        <div style="font-size: 0.72rem; color: #64748b; margin-top: 0.5rem;">
+          Jl. Raya Konstruksi No. 88, Kawasan Logistik Sipil Terpadu &bull; Hotline: (021) 8899-CIVIL
+        </div>
+      </div>
+
+      <div style="text-align: right; flex-shrink: 0;">
+        <div style="display: inline-block; background: {% if tx.type == 'OUT' %}#1d4ed8{% elif tx.type == 'IN' %}#065f46{% else %}#92400e{% endif %}; color: #fff; padding: 0.4rem 1rem; border-radius: 6px; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.4rem;">
+          {% if tx.type == 'OUT' %}
+            SURAT JALAN RESMI
+          {% elif tx.type == 'IN' %}
+            BUKTI PENERIMAAN BARANG
+          {% else %}
+            BERITA ACARA PENYESUAIAN
+          {% endif %}
+        </div>
+        <div style="font-size: 1rem; font-weight: 900; color: #0f172a; font-family: monospace; display: block; margin-top: 0.3rem;">
+          NO: {{ tx.transaction_number }}
+        </div>
+        <div style="font-size: 0.78rem; color: #64748b; margin-top: 4px;">
+          Tanggal: <strong>{{ tx.created_at | datetime_id }}</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Metadata Details -->
+    <div class="slip-meta-grid">
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 0.9rem; border-radius: 8px;">
+        <div style="font-size: 0.65rem; text-transform: uppercase; font-weight: 800; color: #64748b; margin-bottom: 0.4rem; letter-spacing: 0.08em;">
+          {% if tx.type == 'OUT' %}TUJUAN PROYEK / SITE{% else %}VENDOR / PEMASOK{% endif %}
+        </div>
+        <div style="font-size: 1.05rem; font-weight: 800; color: #0f172a;">
+          {{ tx.project_name or tx.supplier_name or 'Penyesuaian Internal Gudang' }}
+        </div>
+        {% if tx.notes %}
+          <div style="font-size: 0.78rem; color: #475569; margin-top: 0.4rem; border-top: 1px solid #e2e8f0; padding-top: 0.4rem;">
+            <strong>Catatan / No. PO:</strong> {{ tx.notes }}
+          </div>
+        {% endif %}
+      </div>
+
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 0.9rem; border-radius: 8px;">
+        <div style="font-size: 0.65rem; text-transform: uppercase; font-weight: 800; color: #64748b; margin-bottom: 0.4rem; letter-spacing: 0.08em;">
+          DATA TRANSPORTASI &amp; PETUGAS
+        </div>
+        <div style="display: grid; grid-template-columns: auto 1fr; gap: 0.2rem 0.75rem; font-size: 0.84rem; align-items: start;">
+          <span style="color: #64748b; white-space: nowrap;">No. Kendaraan:</span>
+          <strong>{{ tx.vehicle_number or '-' }}</strong>
+          <span style="color: #64748b; white-space: nowrap;">Nama Mandor:</span>
+          <strong>{{ tx.driver_name or '-' }}</strong>
+          <span style="color: #64748b; white-space: nowrap;">Checker Gudang:</span>
+          <strong>{{ tx.operator_name or 'Staff Logistik AL-CIVIL' }}</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Items Table -->
+    <div style="margin-bottom: 1.5rem; overflow-x: auto;">
+      <table class="table" style="border: 1px solid #cbd5e1; min-width: 500px; border-radius: 8px; overflow: hidden;">
+        <thead>
+          <tr>
+            <th style="width: 36px; text-align: center; background: #1d4ed8; color: #fff;">No.</th>
+            <th style="background: #1d4ed8; color: #fff;">Kode SKU</th>
+            <th style="background: #1d4ed8; color: #fff;">Nama Material Sipil &amp; Uraian Teknis</th>
+            <th style="text-align: right; width: 100px; background: #1d4ed8; color: #fff;">Kuantitas</th>
+            <th style="text-align: center; width: 80px; background: #1d4ed8; color: #fff;">Satuan</th>
+            <th style="background: #1d4ed8; color: #fff;">Keterangan / Lot No</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in items %}
+            <tr>
+              <td style="text-align: center; font-weight: 700; color: #475569;">{{ loop.index }}</td>
+              <td style="font-weight: 800; color: #1d4ed8; font-family: monospace; font-size: 0.85rem;">{{ item.sku }}</td>
+              <td>
+                <div style="font-weight: 700; color: #0f172a; font-size: 0.9rem;">{{ item.material_name }}</div>
+                {# BUG-11 FIX: Catatan hanya ditampilkan sekali di kolom nama material, kolom terpisah dihapus #}
+              </td>
+              <td style="text-align: right; font-weight: 900; font-size: 1.1rem; color: #0f172a;">{{ item.qty }}</td>
+              <td style="text-align: center; font-weight: 600; color: #475569; font-size: 0.85rem;">{{ item.unit }}</td>
+              <td style="font-size: 0.78rem; color: #64748b;">{{ item.notes or '-' }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr style="background: linear-gradient(to right, #f1f5f9, #e2e8f0);">
+            <td colspan="3" style="text-align: right; font-weight: 800; font-size: 0.85rem; color: #0f172a; padding: 0.75rem 1rem;">TOTAL KUANTITAS FISIK:</td>
+            <td style="text-align: right; font-size: 1.15rem; color: #1d4ed8; font-weight: 900; padding: 0.75rem 1rem;">{{ tx.total_qty }}</td>
+            <td style="text-align: center; font-weight: 700; color: #475569; padding: 0.75rem 1rem;">Unit</td>
+            <td style="padding: 0.75rem 1rem;"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <!-- Terms / Instruksi Mutu -->
+    <div style="font-size: 0.72rem; color: #64748b; line-height: 1.5; border-left: 3px solid #f59e0b; background: #fffbeb; padding: 0.65rem 0.75rem; border-radius: 0 6px 6px 0; margin-bottom: 2rem;">
+      <strong style="color: #92400e;">Instruksi Mutu &amp; K3:</strong>
+      Seluruh material yang dikirim wajib diperiksa fisik, sertifikat uji tarik/tekan baja &amp; tanggal kadaluarsa semen sebelum ditandatangani. Segala komplain atau selisih kuantitas harus dicatat pada lembar berita acara dalam tempo maksimal 1&times;24 jam sejak kedatangan di lokasi proyek.
+    </div>
+
+    <!-- Sign-off Block (4 Parties) -->
+    <div class="slip-sign-grid">
+      <div>
+        <div style="font-weight: 800; font-size: 0.82rem; color: #0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.3rem; margin-bottom: 0.3rem;">Disiapkan Oleh,</div>
+        <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 0.3rem;">(Petugas / Checker Gudang)</div>
+        <div class="slip-sign-box">
+          <span style="font-weight: 700; font-size: 0.75rem; text-align: center; display: block;">{{ tx.operator_name or 'Staff Gudang AL-CIVIL' }}</span>
+        </div>
+      </div>
+
+      <div>
+        <div style="font-weight: 800; font-size: 0.82rem; color: #0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.3rem; margin-bottom: 0.3rem;">Dibawa / Diterima Oleh,</div>
+        <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 0.3rem;">(Mandor Lapangan)</div>
+        <div class="slip-sign-box">
+          <span style="font-weight: 700; font-size: 0.75rem; text-align: center; display: block;">{{ tx.driver_name or '___________________' }}</span>
+        </div>
+      </div>
+
+      <div>
+        <div style="font-weight: 800; font-size: 0.82rem; color: #0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.3rem; margin-bottom: 0.3rem;">Diketahui Oleh,</div>
+        <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 0.3rem;">(Logistik Lapangan Proyek)</div>
+        <div class="slip-sign-box">
+          <span style="font-size: 0.75rem; color: #94a3b8; text-align: center; display: block;">___________________</span>
+        </div>
+      </div>
+
+      <div>
+        <div style="font-weight: 800; font-size: 0.82rem; color: #0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.3rem; margin-bottom: 0.3rem;">Disetujui Oleh,</div>
+        <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 0.3rem;">(Site Manager / PM)</div>
+        <div class="slip-sign-box">
+          <span style="font-size: 0.75rem; color: #94a3b8; text-align: center; display: block;">___________________</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Print Footer -->
+    <div style="margin-top: 1.5rem; padding-top: 0.75rem; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; font-size: 0.7rem; color: #94a3b8;">
+      <span>Dicetak oleh sistem AL-CIVIL WMS &bull; {{ tx.created_at | datetime_id }}</span>
+      <span>Dokumen ini sah tanpa tanda tangan digital</span>
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}

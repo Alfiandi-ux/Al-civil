@@ -1,0 +1,363 @@
+{% extends 'base.html' %}
+
+{% block title %}Master Material | AL-CIVIL WAREHOUSE{% endblock %}
+
+{% block content %}
+<div class="container">
+  
+  <!-- Page Header -->
+  <div class="page-header">
+    <div class="page-title">
+      <h2>Master Material Sipil</h2>
+      <p>Katalog Inventaris, Spesifikasi Teknis, dan Kontrol Batas Minimum Stok</p>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-primary" onclick="openAddMaterialModal()">
+        <span>➕ Tambah Material</span>
+      </button>
+      <a href="{{ url_for('export_materials') }}" class="btn btn-outline">
+        <span>📥 Export CSV</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Filters & Search Toolbar -->
+  <div class="card" style="margin-bottom: 1.25rem;">
+    <div class="card-body" style="padding: 1rem;">
+      <form method="GET" action="{{ url_for('inventory') }}">
+        <div class="filter-bar">
+          <div class="filter-search">
+            <input type="text" name="search" class="form-control" placeholder="Cari nama, SKU, barcode, atau lokasi..." value="{{ search }}">
+          </div>
+          <div class="filter-select-group">
+            <div class="filter-select">
+              <select name="category" class="form-select" onchange="this.form.submit()">
+                <option value="">-- Semua Kategori --</option>
+                {% for cat in categories %}
+                  <option value="{{ cat }}" {% if current_category == cat %}selected{% endif %}>{{ cat }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="filter-select">
+              <select name="status" class="form-select" onchange="this.form.submit()">
+                <option value="">-- Semua Status --</option>
+                <option value="critical" {% if status_filter == 'critical' %}selected{% endif %}>⚠️ Stok Kritis</option>
+                <option value="safe" {% if status_filter == 'safe' %}selected{% endif %}>✅ Stok Aman</option>
+              </select>
+            </div>
+          </div>
+          <div class="filter-actions">
+            <button type="submit" class="btn btn-outline">🔍 Filter</button>
+            {% if search or current_category or status_filter %}
+              <a href="{{ url_for('inventory') }}" class="btn btn-outline" style="color: #ef4444;">✕ Reset</a>
+            {% endif %}
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Materials Table Card -->
+  <div class="card">
+    <div class="card-header">
+      <h3>
+        <span>📦 Daftar Material ({{ materials|length }} Item)</span>
+      </h3>
+      <div>
+        <span class="badge badge-neutral">Satuan Sipil</span>
+      </div>
+    </div>
+    <div class="card-body" style="padding: 0;">
+
+      <!-- Desktop Table View -->
+      <div class="table-responsive desktop-table-view" style="border: none;">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>SKU / Barcode</th>
+              <th>Nama Material &amp; Spesifikasi</th>
+              <th>Kategori</th>
+              <th>Lokasi Gudang</th>
+              <th style="text-align: right;">Stok Fisik</th>
+              <th style="text-align: right;">Harga Satuan</th>
+              <th style="text-align: right;">Total Nilai</th>
+              <th style="text-align: center;">Status</th>
+              <th style="text-align: center;">Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for m in materials %}
+              <tr>
+                <td>
+                  <div style="font-weight: 700; color: #1e3a8a;">{{ m.sku }}</div>
+                  <div style="font-size: 0.72rem; color: #94a3b8; font-family: monospace;">{{ m.barcode or '-' }}</div>
+                </td>
+                <td>
+                  <div style="font-weight: 700; color: #0f172a; font-size: 0.92rem;">{{ m.name }}</div>
+                  <div style="font-size: 0.75rem; color: #64748b; margin-top: 2px;">
+                    {{ m.specification or 'Spesifikasi standar proyek' }}
+                  </div>
+                </td>
+                <td>
+                  <span class="badge badge-neutral">{{ m.category }}</span>
+                </td>
+                <td style="font-size: 0.82rem; color: #475569;">
+                  📍 {{ m.location }}
+                </td>
+                <td style="text-align: right;">
+                  <div style="font-size: 1.05rem; font-weight: 800; color: {% if m.stock <= m.min_stock %}#ef4444{% else %}#0f172a{% endif %};">
+                    {{ m.stock }} <span style="font-size: 0.8rem; font-weight: 600; color: #64748b;">{{ m.unit }}</span>
+                  </div>
+                  <div style="font-size: 0.7rem; color: #94a3b8;">Min: {{ m.min_stock }} {{ m.unit }}</div>
+                </td>
+                <td style="text-align: right; font-size: 0.88rem; font-weight: 600;">
+                  {{ m.unit_price | rupiah }}
+                </td>
+                <td style="text-align: right; font-size: 0.88rem; font-weight: 700; color: #1e3a8a;">
+                  {{ (m.stock * m.unit_price) | rupiah }}
+                </td>
+                <td style="text-align: center;">
+                  {% if m.stock <= m.min_stock %}
+                    <span class="badge badge-danger">Kritis</span>
+                  {% else %}
+                    <span class="badge badge-success">Aman</span>
+                  {% endif %}
+                </td>
+                <td style="text-align: center; white-space: nowrap;">
+                  <button class="btn btn-outline btn-sm" onclick='editMaterial({{ m | tojson }})'>
+                    ✏️ Edit
+                  </button>
+                  <form method="POST" action="{{ url_for('delete_material', material_id=m.id) }}" style="display: inline-block;" onsubmit='return confirm("Hapus material " + {{ m.name | tojson }} + "?");'>
+                    <button type="submit" class="btn btn-outline btn-sm" style="color: #ef4444; border-color: #fecaca;">
+                      🗑️
+                    </button>
+                  </form>
+                </td>
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan="9" style="text-align: center; padding: 3rem; color: #64748b;">
+                  <div style="font-size: 2rem; margin-bottom: 0.5rem;">🔍</div>
+                  <p>Tidak ada material yang cocok dengan filter pencarian.</p>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Mobile Card View -->
+      <div class="mobile-card-view" style="padding: 0.75rem;">
+        {% for m in materials %}
+          <div class="mobile-card" style="border-left: 3px solid {% if m.stock <= m.min_stock %}#ef4444{% else %}#10b981{% endif %};">
+            <div class="mobile-card-header">
+              <div style="flex: 1; min-width: 0;">
+                <div class="mobile-card-title">{{ m.name }}</div>
+                <div class="mobile-card-subtitle" style="font-family: monospace; font-weight: 600; color: #1e3a8a;">{{ m.sku }}</div>
+              </div>
+              <div style="text-align: right; flex-shrink: 0;">
+                {% if m.stock <= m.min_stock %}
+                  <span class="badge badge-danger">Kritis</span>
+                {% else %}
+                  <span class="badge badge-success">Aman</span>
+                {% endif %}
+              </div>
+            </div>
+            <div class="mobile-card-tags">
+              <span class="badge badge-neutral">{{ m.category }}</span>
+              <span style="font-size: 0.72rem; color: #64748b;">📍 {{ m.location }}</span>
+            </div>
+            <div class="mobile-card-body">
+              <div>
+                <div class="mobile-card-metric-label">Stok Fisik</div>
+                <div class="mobile-card-metric-val" style="color: {% if m.stock <= m.min_stock %}#ef4444{% else %}#0f172a{% endif %};">
+                  {{ m.stock }} <span style="font-size: 0.75rem; font-weight: 600; color: #64748b;">{{ m.unit }}</span>
+                </div>
+                <div style="font-size: 0.68rem; color: #94a3b8;">Min: {{ m.min_stock }} {{ m.unit }}</div>
+              </div>
+              <div>
+                <div class="mobile-card-metric-label">Nilai Stok</div>
+                <div class="mobile-card-metric-val" style="font-size: 0.85rem; color: #1e3a8a;">{{ (m.stock * m.unit_price) | rupiah }}</div>
+                <div style="font-size: 0.68rem; color: #94a3b8;">@ {{ m.unit_price | rupiah }}</div>
+              </div>
+              {% if m.specification %}
+              <div class="mobile-card-col-full">
+                📋 {{ m.specification }}
+              </div>
+              {% endif %}
+            </div>
+            <div class="mobile-card-footer">
+              <button class="btn btn-outline btn-sm" onclick='editMaterial({{ m | tojson }})' style="flex: 1; justify-content: center;">
+                ✏️ Edit
+              </button>
+              <form method="POST" action="{{ url_for('delete_material', material_id=m.id) }}" onsubmit='return confirm("Hapus material " + {{ m.name | tojson }} + "?");' style="flex: 0;">
+                <button type="submit" class="btn btn-outline btn-sm" style="color: #ef4444; border-color: #fecaca; padding: 0.5rem 0.75rem;">
+                  🗑️
+                </button>
+              </form>
+            </div>
+          </div>
+        {% else %}
+          <div style="padding: 2.5rem; text-align: center; color: #64748b;">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">🔍</div>
+            <p>Tidak ada material yang cocok.</p>
+          </div>
+        {% endfor %}
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- Modal Tambah / Edit Material -->
+<div id="materialModal" class="modal-overlay">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h4 id="modalTitle">Tambah Material Baru</h4>
+      <button type="button" class="modal-close" onclick="closeModal('materialModal')">&times;</button>
+    </div>
+    <form method="POST" action="{{ url_for('save_material') }}">
+      <div class="modal-body">
+        <input type="hidden" name="id" id="matId">
+        
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">Kode SKU (*)</label>
+            <input type="text" name="sku" id="matSku" class="form-control" placeholder="Contoh: BES-010" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Barcode / Kode Scanner</label>
+            <input type="text" name="barcode" id="matBarcode" class="form-control" placeholder="Contoh: 8991001010">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Nama Material Sipil (*)</label>
+          <input type="text" name="name" id="matName" class="form-control" placeholder="Contoh: Besi Beton Ulir D22 SNI" required>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">Kategori (*)</label>
+            <select name="category" id="matCategory" class="form-select" required>
+              <option value="Besi &amp; Baja">Besi &amp; Baja</option>
+              <option value="Semen &amp; Binder">Semen &amp; Binder</option>
+              <option value="Agregat &amp; Pasir">Agregat &amp; Pasir</option>
+              <option value="Pipa &amp; Drainase">Pipa &amp; Drainase</option>
+              <option value="Kayu &amp; Bekisting">Kayu &amp; Bekisting</option>
+              <option value="Alat &amp; K3 Sipil">Alat &amp; K3 Sipil</option>
+              <option value="Cat &amp; Finishing">Cat &amp; Finishing</option>
+              <option value="Lainnya">Lainnya</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Satuan (*)</label>
+            <select name="unit" id="matUnit" class="form-select" required>
+              <option value="Batang">Batang</option>
+              <option value="Sak">Sak (50kg/40kg)</option>
+              <option value="Kg">Kg (Kilogram)</option>
+              <option value="M3">M3 (Meter Kubik)</option>
+              <option value="Lembar">Lembar</option>
+              <option value="M">M (Meter Linear)</option>
+              <option value="Ton">Ton</option>
+              <option value="Pcs">Pcs / Buah</option>
+              <option value="Roll">Roll</option>
+              <option value="Pail">Pail / Drum</option>
+              <option value="Set">Set</option>
+              <option value="Pasang">Pasang</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-grid-3">
+          <div class="form-group">
+            <label class="form-label">Stok Awal</label>
+            <input type="number" step="any" min="0" name="stock" id="matStock" class="form-control" value="0" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Batas Stok Min</label>
+            <input type="number" step="any" min="0" name="min_stock" id="matMinStock" class="form-control" value="10" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Harga Satuan (Rp)</label>
+            <input type="number" step="any" min="0" name="unit_price" id="matPrice" class="form-control" value="0" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Lokasi Rak / Yard / Zona Gudang</label>
+          <input type="text" name="location" id="matLocation" class="form-control" placeholder="Contoh: Yard Baja - Rak 04">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Spesifikasi Teknis / Standar Mutu</label>
+          <textarea name="specification" id="matSpec" class="form-control" rows="2" placeholder="Contoh: Mutu SNI 2052:2017, TS 420B, Panjang 12 Meter"></textarea>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" onclick="closeModal('materialModal')">Batal</button>
+        <button type="submit" class="btn btn-primary">Simpan Data Material</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function openAddMaterialModal() {
+  document.getElementById('modalTitle').textContent = 'Tambah Material Baru';
+  document.getElementById('matId').value = '';
+  document.getElementById('matSku').value = '';
+  document.getElementById('matBarcode').value = '';
+  document.getElementById('matName').value = '';
+  document.getElementById('matCategory').value = 'Besi & Baja';
+  document.getElementById('matUnit').value = 'Batang';
+  document.getElementById('matStock').value = '0';
+  document.getElementById('matMinStock').value = '10';
+  document.getElementById('matPrice').value = '0';
+  document.getElementById('matLocation').value = 'Gudang Utama';
+  document.getElementById('matSpec').value = '';
+  openModal('materialModal');
+}
+
+function editMaterial(item) {
+  document.getElementById('modalTitle').textContent = 'Edit Data Material: ' + item.name;
+  document.getElementById('matId').value = item.id;
+  document.getElementById('matSku').value = item.sku;
+  document.getElementById('matBarcode').value = item.barcode || '';
+  document.getElementById('matName').value = item.name;
+
+  // Pastikan kategori/unit lama tetap terpilih walau tidak ada di daftar opsi
+  // (mis. data yang diimpor atau kategori kustom), agar edit tidak mengubahnya.
+  const categorySelect = document.getElementById('matCategory');
+  if (item.category && !Array.from(categorySelect.options).some(o => o.value === item.category)) {
+    categorySelect.add(new Option(item.category, item.category));
+  }
+  categorySelect.value = item.category || categorySelect.options[0].value;
+
+  const unitSelect = document.getElementById('matUnit');
+  if (item.unit && !Array.from(unitSelect.options).some(o => o.value.toLowerCase() === item.unit.toLowerCase())) {
+    unitSelect.add(new Option(item.unit, item.unit));
+  }
+  let unitMatched = false;
+  for (let i = 0; i < unitSelect.options.length; i++) {
+    if (unitSelect.options[i].value.toLowerCase() === (item.unit || '').toLowerCase()) {
+      unitSelect.selectedIndex = i;
+      unitMatched = true;
+      break;
+    }
+  }
+  if (!unitMatched) unitSelect.value = item.unit;
+  document.getElementById('matStock').value = item.stock;
+  document.getElementById('matMinStock').value = item.min_stock;
+  document.getElementById('matPrice').value = item.unit_price;
+  document.getElementById('matLocation').value = item.location || '';
+  document.getElementById('matSpec').value = item.specification || '';
+  openModal('materialModal');
+}
+</script>
+{% endblock %}

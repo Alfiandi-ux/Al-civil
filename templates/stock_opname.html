@@ -1,0 +1,236 @@
+{% extends 'base.html' %}
+
+{% block title %}Stock Opname & Audit Fisik | AL-CIVIL WAREHOUSE{% endblock %}
+
+{% block content %}
+<div class="container">
+  
+  <!-- Page Header -->
+  <div class="page-header">
+    <div class="page-title">
+      <h2>Stock Opname &amp; Audit Fisik Material</h2>
+      <p>Penyelarasan Stok Sistem dengan Hasil Perhitungan Fisik di Lapangan</p>
+    </div>
+    <div class="header-actions">
+      <a href="{{ url_for('inventory') }}" class="btn btn-outline">
+        📦 Master Material
+      </a>
+      <a href="{{ url_for('quick_transaction') }}" class="btn btn-accent">
+        ⚡ Transaksi Cepat
+      </a>
+    </div>
+  </div>
+
+  <div class="split-grid-opname">
+    
+    <!-- Left Column: Form Penyesuaian Stok -->
+    <div class="card" style="border-top: 4px solid #f59e0b;">
+      <div class="card-header">
+        <h3>
+          <span>⚖️ Form Penyesuaian Stok Fisik</span>
+        </h3>
+      </div>
+      <form method="POST" action="{{ url_for('save_stock_opname') }}">
+        <div class="card-body">
+          
+          <div class="form-group">
+            <label class="form-label">Pilih Material Sipil (*)</label>
+            <select name="material_id" id="auditMaterialSelect" class="form-select" required onchange="updateCurrentStockInfo()">
+              <option value="">-- Pilih Material Yang Diaudit --</option>
+              {% for m in materials %}
+                <option value="{{ m.id }}" data-stock="{{ m.stock }}" data-unit="{{ m.unit }}">
+                  {{ m.sku }} - {{ m.name }} (Stok: {{ m.stock }} {{ m.unit }})
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- Current Info Preview -->
+          <div style="background: #f8fafc; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.85rem; margin-bottom: 1rem;">
+            <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: #64748b; margin-bottom: 0.25rem;">
+              <span>Stok Saat Ini (Sistem):</span>
+              <strong id="displayCurrentStock" style="color: #0f172a; font-size: 1rem;">-</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: #64748b;">
+              <span>Satuan Material:</span>
+              <strong id="displayUnit" style="color: #0f172a;">-</strong>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Hasil Perhitungan Fisik Riil (*)</label>
+            <input type="number" step="any" min="0" name="new_stock" id="auditNewStock" class="form-control" style="font-size: 1.15rem; font-weight: 800; color: #1e3a8a;" placeholder="0" required oninput="calculateDifference()">
+          </div>
+
+          <!-- Difference preview -->
+          <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 0.85rem; font-weight: 600; color: #1e40af;">Selisih Stok:</span>
+            <span id="displayDiff" style="font-size: 1.15rem; font-weight: 800; color: #1e40af;">0</span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Alasan Penyesuaian / Hasil Temuan Lapangan (*)</label>
+            <textarea name="reason" class="form-control" rows="3" placeholder="Contoh: Susut timbunan pasir akibat cuaca, sisa potongan baja tulangan, atau koreksi hitung timbangan..." required></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Nama Auditor / Pengawas Lapangan</label>
+            <input type="text" name="adjusted_by" class="form-control" value="Auditor Lapangan AL-CIVIL">
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-lg" style="width: 100%;">
+            💾 Simpan Penyesuaian Stok
+          </button>
+
+        </div>
+      </form>
+    </div>
+
+    <!-- Right Column: Audit Log History -->
+    <div class="card">
+      <div class="card-header">
+        <h3>
+          <span>📋 Riwayat Audit &amp; Penyesuaian Fisik ({{ adjustments|length }})</span>
+        </h3>
+      </div>
+      <div class="card-body" style="padding: 0;">
+        <!-- Desktop Table -->
+        <div class="table-responsive desktop-table-view" style="border: none;">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Tanggal / Jam</th>
+                <th>Material</th>
+                <th style="text-align: right;">Stok Awal</th>
+                <th style="text-align: right;">Stok Fisik Baru</th>
+                <th style="text-align: center;">Selisih</th>
+                <th>Alasan &amp; Auditor</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for a in adjustments %}
+                <tr>
+                  <td style="font-size: 0.8rem; color: #64748b; white-space: nowrap;">
+                    {{ a.created_at | datetime_id }}
+                  </td>
+                  <td>
+                    <div style="font-weight: 700; color: #0f172a;">{{ a.material_name }}</div>
+                    <div style="font-size: 0.72rem; color: #64748b;">SKU: {{ a.sku }}</div>
+                  </td>
+                  <td style="text-align: right; font-size: 0.88rem;">
+                    {{ a.old_stock }} {{ a.unit }}
+                  </td>
+                  <td style="text-align: right; font-weight: 800; font-size: 0.95rem; color: #1e3a8a;">
+                    {{ a.new_stock }} {{ a.unit }}
+                  </td>
+                  <td style="text-align: center;">
+                    {% if a.difference > 0 %}
+                      <span class="badge badge-success">+{{ a.difference }} {{ a.unit }}</span>
+                    {% elif a.difference < 0 %}
+                      <span class="badge badge-danger">{{ a.difference }} {{ a.unit }}</span>
+                    {% else %}
+                      <span class="badge badge-neutral">0 {{ a.unit }}</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <div style="font-size: 0.82rem; color: #0f172a; font-weight: 600;">{{ a.reason }}</div>
+                    <div style="font-size: 0.72rem; color: #64748b;">👤 {{ a.adjusted_by }}</div>
+                  </td>
+                </tr>
+              {% else %}
+                <tr>
+                  <td colspan="6" style="text-align: center; padding: 2.5rem; color: #64748b;">
+                    Belum ada riwayat stock opname tercatat.
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <!-- Mobile Card View -->
+        <div class="mobile-card-view" style="padding: 0.75rem;">
+          {% for a in adjustments %}
+            <div class="mobile-card">
+              <div class="mobile-card-header">
+                <div>
+                  <div class="mobile-card-title">{{ a.material_name }}</div>
+                  <div class="mobile-card-subtitle">SKU: {{ a.sku }}</div>
+                </div>
+                <div>
+                  {% if a.difference > 0 %}
+                    <span class="badge badge-success">+{{ a.difference }}</span>
+                  {% elif a.difference < 0 %}
+                    <span class="badge badge-danger">{{ a.difference }}</span>
+                  {% else %}
+                    <span class="badge badge-neutral">±0</span>
+                  {% endif %}
+                </div>
+              </div>
+              <div class="mobile-card-body">
+                <div>
+                  <div class="mobile-card-metric-label">Stok Lama</div>
+                  <div class="mobile-card-metric-val">{{ a.old_stock }} {{ a.unit }}</div>
+                </div>
+                <div>
+                  <div class="mobile-card-metric-label">Stok Baru</div>
+                  <div class="mobile-card-metric-val" style="color: #1e3a8a;">{{ a.new_stock }} {{ a.unit }}</div>
+                </div>
+                <div class="mobile-card-col-full">
+                  📋 {{ a.reason }} &bull; 👤 {{ a.adjusted_by }}
+                </div>
+                <div class="mobile-card-col-full" style="border-top: none; margin-top: 0; padding-top: 0; color: #94a3b8;">
+                  🕒 {{ a.created_at | datetime_id }}
+                </div>
+              </div>
+            </div>
+          {% else %}
+            <div style="padding: 2.5rem; text-align: center; color: #64748b;">
+              Belum ada riwayat stock opname tercatat.
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let currentStockValue = 0;
+let currentUnitStr = '';
+
+function updateCurrentStockInfo() {
+  const select = document.getElementById('auditMaterialSelect');
+  const opt = select.options[select.selectedIndex];
+  if (opt && opt.value) {
+    currentStockValue = parseFloat(opt.getAttribute('data-stock') || 0);
+    currentUnitStr = opt.getAttribute('data-unit') || '';
+    document.getElementById('displayCurrentStock').textContent = `${currentStockValue} ${currentUnitStr}`;
+    document.getElementById('displayUnit').textContent = currentUnitStr;
+    calculateDifference();
+  } else {
+    currentStockValue = 0;
+    currentUnitStr = '';
+    document.getElementById('displayCurrentStock').textContent = '-';
+    document.getElementById('displayUnit').textContent = '-';
+    document.getElementById('displayDiff').textContent = '0';
+  }
+}
+
+function calculateDifference() {
+  const newStockInput = document.getElementById('auditNewStock');
+  const val = parseFloat(newStockInput.value);
+  if (!isNaN(val)) {
+    const diff = val - currentStockValue;
+    const prefix = diff > 0 ? '+' : '';
+    document.getElementById('displayDiff').textContent = `${prefix}${diff} ${currentUnitStr}`;
+    document.getElementById('displayDiff').style.color = diff < 0 ? '#ef4444' : (diff > 0 ? '#10b981' : '#1e40af');
+  } else {
+    document.getElementById('displayDiff').textContent = '0';
+  }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,320 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard | AL-CIVIL WAREHOUSE{% endblock %}
+
+{% block content %}
+<div class="container">
+  <!-- Page Header -->
+  <div class="page-header">
+    <div class="page-title">
+      <h2>Ringkasan Gudang AL-CIVIL</h2>
+      <p>Pusat Logistik &amp; Material Teknik Sipil Terpadu</p>
+    </div>
+    <div class="header-actions">
+      <a href="{{ url_for('quick_transaction') }}" class="btn btn-accent btn-lg">
+        <span>⚡ Mode Transaksi Cepat</span>
+        <span class="kbd-badge">F2</span>
+      </a>
+      <a href="{{ url_for('stock_opname') }}" class="btn btn-outline">
+        <span>⚖️ Stock Opname</span>
+      </a>
+      <a href="{{ url_for('backup_view') }}" class="btn btn-outline">
+        <span>💾 Backup Data</span>
+      </a>
+      <a href="{{ url_for('export_materials') }}" class="btn btn-outline">
+        <span>📥 Export CSV</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- KPI Metrics Grid -->
+  <div class="kpi-grid">
+    <div class="kpi-card kpi-blue">
+      <div class="kpi-content">
+        <div class="kpi-label">Total Material (SKU)</div>
+        <div class="kpi-value">{{ total_sku }}</div>
+        <div class="kpi-sub">
+          <span class="badge" style="background: rgba(255,255,255,0.22); color: #fff; border: 1px solid rgba(255,255,255,0.35);">Aktif di Katalog</span>
+        </div>
+      </div>
+      <div class="kpi-icon">🏗️</div>
+    </div>
+
+    <div class="kpi-card kpi-emerald">
+      <div class="kpi-content">
+        <div class="kpi-label">Total Nilai Aset Gudang</div>
+        <div class="kpi-value kpi-value-sm">{{ total_asset_val | rupiah }}</div>
+        <div class="kpi-sub">
+          <span class="badge" style="background: rgba(255,255,255,0.22); color: #fff; border: 1px solid rgba(255,255,255,0.35);">Valuasi Stok Terkini</span>
+        </div>
+      </div>
+      <div class="kpi-icon">💰</div>
+    </div>
+
+    <div class="kpi-card kpi-amber">
+      <div class="kpi-content">
+        <div class="kpi-label">Transaksi Hari Ini</div>
+        <div class="kpi-value">{{ today_transactions }}</div>
+        <div class="kpi-sub">
+          <span class="badge" style="background: rgba(255,255,255,0.22); color: #fff; border: 1px solid rgba(255,255,255,0.35);">Surat Jalan &amp; Penerimaan</span>
+        </div>
+      </div>
+      <div class="kpi-icon">🚚</div>
+    </div>
+
+    <div class="kpi-card kpi-rose">
+      <div class="kpi-content">
+        <div class="kpi-label">Material Stok Kritis</div>
+        {# BUG-06 FIX: Gunakan total_critical (dari COUNT *) bukan critical_items|length yang dibatasi LIMIT 6 #}
+        <div class="kpi-value">{{ total_critical }}</div>
+        <div class="kpi-sub">
+          {% if total_critical > 0 %}
+            <span class="badge" style="background: #ffffff; color: #e11d48; font-weight: 800;">Perlu Pengadaan</span>
+          {% else %}
+            <span class="badge" style="background: rgba(255,255,255,0.25); color: #fff;">Stok Aman</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="kpi-icon">⚠️</div>
+    </div>
+  </div>
+
+  <!-- Main Grid: Alerts & Transactions -->
+  <div class="split-grid-dashboard">
+    
+    <!-- Left Column: Critical Stock & Category Breakdown -->
+    <div>
+      <!-- Critical Items Card -->
+      <div class="card">
+        <div class="card-header">
+          <h3>
+            <span>🚨 Peringatan Stok Menipis</span>
+          </h3>
+          <a href="{{ url_for('inventory', status='critical') }}" class="btn btn-outline btn-sm">Lihat Semua</a>
+        </div>
+        <div class="card-body" style="padding: 0;">
+          {% if critical_items %}
+            <!-- Desktop table -->
+            <div class="table-responsive desktop-table-view" style="border: none;">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Material</th>
+                    <th>Lokasi</th>
+                    <th style="text-align: right;">Sisa Stok</th>
+                    <th style="text-align: right;">Batas Min</th>
+                    <th>Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for item in critical_items %}
+                    <tr>
+                      <td>
+                        <div style="font-weight: 700; color: #0f172a;">{{ item.name }}</div>
+                        <div style="font-size: 0.75rem; color: #64748b;">SKU: {{ item.sku }}</div>
+                      </td>
+                      <td style="font-size: 0.8rem; color: #475569;">{{ item.location }}</td>
+                      <td style="text-align: right;">
+                        <span class="badge badge-danger">{{ item.stock }} {{ item.unit }}</span>
+                      </td>
+                      <td style="text-align: right; font-size: 0.82rem; color: #64748b;">
+                        {{ item.min_stock }} {{ item.unit }}
+                      </td>
+                      <td>
+                        <a href="{{ url_for('quick_transaction') }}" class="btn btn-primary btn-sm">
+                          + Masuk
+                        </a>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            <!-- Mobile cards -->
+            <div class="mobile-card-view" style="padding: 0.75rem;">
+              {% for item in critical_items %}
+                <div class="mobile-card" style="border-left: 3px solid #ef4444;">
+                  <div class="mobile-card-header">
+                    <div>
+                      <div class="mobile-card-title" style="color: #0f172a;">{{ item.name }}</div>
+                      <div class="mobile-card-subtitle">SKU: {{ item.sku }} &bull; {{ item.location }}</div>
+                    </div>
+                    <span class="badge badge-danger">{{ item.stock }} {{ item.unit }}</span>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.4rem;">
+                    <span style="font-size: 0.75rem; color: #64748b;">Min: {{ item.min_stock }} {{ item.unit }}</span>
+                    <a href="{{ url_for('quick_transaction') }}" class="btn btn-primary btn-sm">+ Terima Masuk</a>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div style="padding: 2rem; text-align: center; color: #10b981;">
+              <div style="font-size: 2rem; margin-bottom: 0.5rem;">🎉</div>
+              <strong>Semua stok material dalam batas aman!</strong>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Categories Summary Card -->
+      <div class="card">
+        <div class="card-header">
+          <h3>
+            <span>📊 Klasifikasi Material Sipil</span>
+          </h3>
+        </div>
+        <div class="card-body" style="padding: 0;">
+          <div class="table-responsive" style="border: none;">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Kategori</th>
+                  <th style="text-align: center;">Item</th>
+                  <th style="text-align: right;">Valuasi Aset</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for cat in categories %}
+                  <tr>
+                    <td>
+                      <strong>{{ cat.category }}</strong>
+                    </td>
+                    <td style="text-align: center;">
+                      <span class="badge badge-neutral">{{ cat.item_count }} SKU</span>
+                    </td>
+                    <td style="text-align: right; font-weight: 700; color: #1e3a8a; font-size: 0.85rem;">
+                      {{ cat.category_val | rupiah }}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: Recent Transactions & Surat Jalan -->
+    <div>
+      <div class="card">
+        <div class="card-header">
+          <h3>
+            <span>📋 Transaksi &amp; Surat Jalan Terbaru</span>
+          </h3>
+          <a href="{{ url_for('transactions') }}" class="btn btn-outline btn-sm">Lihat Semua</a>
+        </div>
+        <div class="card-body" style="padding: 0;">
+          {% if recent_transactions %}
+            <!-- Desktop table -->
+            <div class="table-responsive desktop-table-view" style="border: none;">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>No. Dokumen</th>
+                    <th>Tujuan / Vendor</th>
+                    <th>Kendaraan / Mandor</th>
+                    <th style="text-align: right;">Total Item</th>
+                    <th>Cetak</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for tx in recent_transactions %}
+                    <tr>
+                      <td>
+                        <div style="font-weight: 700; color: #0f172a;">{{ tx.transaction_number }}</div>
+                        <div style="font-size: 0.72rem; color: #64748b;">
+                          {{ tx.created_at | datetime_id }}
+                          {% if tx.type == 'OUT' %}
+                            <span class="badge badge-primary" style="margin-left: 4px;">Keluar (SJ)</span>
+                          {% elif tx.type == 'IN' %}
+                            <span class="badge badge-success" style="margin-left: 4px;">Masuk (BPP)</span>
+                          {% else %}
+                            <span class="badge badge-warning" style="margin-left: 4px;">Penyesuaian</span>
+                          {% endif %}
+                        </div>
+                      </td>
+                      <td>
+                        <div style="font-weight: 600; font-size: 0.82rem;">
+                          {{ tx.project_name or tx.supplier_name or 'Penyesuaian Stok' }}
+                        </div>
+                      </td>
+                      <td style="font-size: 0.8rem; color: #475569;">
+                        <div>{{ tx.vehicle_number or '-' }}</div>
+                        <div style="font-size: 0.72rem; color: #64748b;">{{ tx.driver_name or '' }}</div>
+                      </td>
+                      <td style="text-align: right; font-weight: 700;">
+                        {{ tx.item_count }} item
+                        <div style="font-size: 0.72rem; color: #64748b;">{{ tx.total_qty }} unit</div>
+                      </td>
+                      <td>
+                        <a href="{{ url_for('view_slip', tx_id=tx.id) }}" class="btn btn-outline btn-sm">
+                          🖨️ Cetak
+                        </a>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            <!-- Mobile transaction cards -->
+            <div class="mobile-card-view" style="padding: 0.75rem;">
+              {% for tx in recent_transactions %}
+                <div class="mobile-card">
+                  <div class="mobile-card-header">
+                    <div style="flex: 1; min-width: 0;">
+                      <div class="mobile-card-title" style="font-size: 0.88rem; font-family: monospace;">{{ tx.transaction_number }}</div>
+                      <div class="mobile-card-subtitle">{{ tx.created_at | datetime_id }}</div>
+                    </div>
+                    <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0;">
+                      {% if tx.type == 'OUT' %}
+                        <span class="badge badge-primary">Keluar</span>
+                      {% elif tx.type == 'IN' %}
+                        <span class="badge badge-success">Masuk</span>
+                      {% else %}
+                        <span class="badge badge-warning">Adj.</span>
+                      {% endif %}
+                      <span style="font-size: 0.75rem; font-weight: 700; color: #1e3a8a;">{{ tx.item_count }} item</span>
+                    </div>
+                  </div>
+                  <div style="font-size: 0.82rem; color: #334155; margin-top: 0.25rem;">
+                    📍 {{ tx.project_name or tx.supplier_name or 'Penyesuaian Stok' }}
+                  </div>
+                  {% if tx.vehicle_number or tx.driver_name %}
+                  <div style="font-size: 0.75rem; color: #64748b;">
+                    🚗 {{ tx.vehicle_number or '-' }}{% if tx.driver_name %} &bull; {{ tx.driver_name }}{% endif %}
+                  </div>
+                  {% endif %}
+                  <div style="border-top: 1px solid var(--border-color); padding-top: 0.5rem; margin-top: 0.4rem;">
+                    <a href="{{ url_for('view_slip', tx_id=tx.id) }}" class="btn btn-outline btn-sm" style="width: 100%; justify-content: center;">
+                      🖨️ Lihat &amp; Cetak Surat Jalan
+                    </a>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div style="padding: 2.5rem; text-align: center; color: #64748b;">
+              <p>Belum ada transaksi recorded.</p>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Quick Shortcuts Banner (hide on mobile) -->
+      <div class="no-mobile-tips" style="background: linear-gradient(135deg, #eff6ff, #f0fdf4); border: 1.5px dashed #bfdbfe; border-radius: 10px; padding: 1.25rem;">
+        <h4 style="font-size: 0.95rem; font-weight: 800; color: #1e3a8a; margin-bottom: 0.4rem; display: flex; align-items: center; gap: 0.4rem;">
+          ⚡ Tips Transaksi Cepat Gudang AL-CIVIL
+        </h4>
+        <ul style="font-size: 0.82rem; color: #334155; margin-left: 1.2rem; line-height: 1.6;">
+          <li>Tekan <b>F2</b> kapan saja untuk langsung membuka pencarian material atau scanner barcode.</li>
+          <li>Gunakan pemindai barcode USB/Bluetooth untuk otomatis memasukkan material.</li>
+          <li>Tekan <b>F9</b> untuk langsung memproses dan menerbitkan Surat Jalan resmi.</li>
+          <li>Surat Jalan otomatis tercetak dengan 4 kolom tanda tangan standar proyek teknik sipil.</li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

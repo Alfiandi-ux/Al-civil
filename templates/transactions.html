@@ -1,0 +1,200 @@
+{% extends 'base.html' %}
+
+{% block title %}Surat Jalan & Transaksi | AL-CIVIL WAREHOUSE{% endblock %}
+
+{% block content %}
+<div class="container">
+  
+  <!-- Page Header -->
+  <div class="page-header">
+    <div class="page-title">
+      <h2>📄 Logistik &amp; Riwayat Transaksi</h2>
+      <p>Arsip Surat Jalan (SJ), Bukti Penerimaan Barang (BPP), dan Log Pengeluaran Proyek</p>
+    </div>
+    <div class="header-actions">
+      <a href="{{ url_for('quick_transaction') }}" class="btn btn-accent">
+        <span>⚡</span> Transaksi Baru
+      </a>
+      <a href="{{ url_for('export_transactions') }}" class="btn btn-outline">
+        <span>📥</span> Export CSV
+      </a>
+    </div>
+  </div>
+
+  <!-- Filters Toolbar -->
+  <div class="card" style="margin-bottom: 1.25rem;">
+    <div class="card-body" style="padding: 1rem;">
+      <form method="GET" action="{{ url_for('transactions') }}">
+        <div class="filter-bar">
+          <div class="filter-search">
+            <input type="text" name="search" class="form-control" placeholder="🔍 Cari No. Surat Jalan, Proyek, Mandor..." value="{{ search }}">
+          </div>
+          <div class="filter-select-group">
+            <div class="filter-select">
+              <select name="type" class="form-select" onchange="this.form.submit()">
+                <option value="">-- Semua Jenis --</option>
+                <option value="OUT" {% if filter_type == 'OUT' %}selected{% endif %}>📤 Barang Keluar</option>
+                <option value="IN" {% if filter_type == 'IN' %}selected{% endif %}>📥 Barang Masuk</option>
+                <option value="ADJUST" {% if filter_type == 'ADJUST' %}selected{% endif %}>⚖️ Penyesuaian</option>
+              </select>
+            </div>
+          </div>
+          <div class="filter-actions">
+            <button type="submit" class="btn btn-primary btn-sm">🔍 Filter</button>
+            {% if search or filter_type %}
+              <a href="{{ url_for('transactions') }}" class="btn btn-outline btn-sm" style="color: #ef4444;">✕ Reset</a>
+            {% endif %}
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Transactions Table -->
+  <div class="card">
+    <div class="card-header">
+      <h3>📋 Arsip Dokumen ({{ transactions|length }} Dokumen)</h3>
+      <div style="display: flex; gap: 0.5rem; align-items: center;">
+        {% if filter_type == 'OUT' %}
+          <span class="badge badge-primary">Keluar (SJ)</span>
+        {% elif filter_type == 'IN' %}
+          <span class="badge badge-success">Masuk (BPP)</span>
+        {% elif filter_type == 'ADJUST' %}
+          <span class="badge badge-warning">Penyesuaian</span>
+        {% else %}
+          <span class="badge badge-neutral">Semua Jenis</span>
+        {% endif %}
+      </div>
+    </div>
+    <div class="card-body" style="padding: 0;">
+
+      <!-- Desktop Table View -->
+      <div class="table-responsive desktop-table-view" style="border: none;">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>No. Dokumen / Tanggal</th>
+              <th>Jenis</th>
+              <th>Tujuan Proyek / Supplier</th>
+              <th>Armada &amp; Mandor</th>
+              <th style="text-align: right;">Kuantitas</th>
+              <th style="text-align: right;">Total Nilai</th>
+              <th>Petugas Checker</th>
+              <th style="text-align: center;">Cetak</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in transactions %}
+              <tr>
+                <td>
+                  <div style="font-weight: 800; font-size: 0.88rem; color: #1d4ed8; font-family: monospace;">
+                    {{ t.transaction_number }}
+                  </div>
+                  <div style="font-size: 0.72rem; color: #94a3b8; margin-top: 2px;">
+                    🕒 {{ t.created_at | datetime_id }}
+                  </div>
+                </td>
+                <td>
+                  {% if t.type == 'OUT' %}
+                    <span class="badge badge-primary">📤 Keluar</span>
+                  {% elif t.type == 'IN' %}
+                    <span class="badge badge-success">📥 Masuk</span>
+                  {% else %}
+                    <span class="badge badge-warning">⚖️ Adj.</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <div style="font-weight: 600; font-size: 0.88rem; color: #0f172a;">
+                    {{ t.project_name or t.supplier_name or 'Internal' }}
+                  </div>
+                </td>
+                <td style="font-size: 0.82rem; color: #475569;">
+                  <div style="font-weight: 600;">{{ t.vehicle_number or '-' }}</div>
+                  <div style="font-size: 0.75rem; color: #94a3b8;">{{ t.driver_name or '-' }}</div>
+                </td>
+                <td style="text-align: right;">
+                  <div style="font-weight: 700; font-size: 0.95rem;">{{ t.total_qty }}</div>
+                  <div style="font-size: 0.72rem; color: #94a3b8; font-weight: 400;">{{ t.item_count }} item</div>
+                </td>
+                <td style="text-align: right; font-weight: 700; color: #1d4ed8; font-size: 0.88rem;">
+                  {{ t.total_amount | rupiah }}
+                </td>
+                <td style="font-size: 0.82rem; color: #475569;">{{ t.operator_name or '-' }}</td>
+                <td style="text-align: center;">
+                  <a href="{{ url_for('view_slip', tx_id=t.id) }}" class="btn btn-outline btn-sm">
+                    🖨️ Cetak
+                  </a>
+                </td>
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan="8" style="text-align: center; padding: 4rem; color: #94a3b8;">
+                  <div style="font-size: 2.5rem; margin-bottom: 0.75rem;">📭</div>
+                  <div style="font-weight: 600;">Belum ada transaksi yang tercatat.</div>
+                  <div style="font-size: 0.82rem; margin-top: 0.4rem;">Gunakan mode Transaksi Cepat untuk mencatat.</div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Mobile Card View -->
+      <div class="mobile-card-view" style="padding: 0.75rem;">
+        {% for t in transactions %}
+          <div class="mobile-card">
+            <div class="mobile-card-header">
+              <div style="flex: 1; min-width: 0;">
+                <div class="mobile-card-title" style="font-size: 0.82rem; font-family: monospace; color: #1d4ed8;">{{ t.transaction_number }}</div>
+                <div class="mobile-card-subtitle">🕒 {{ t.created_at | datetime_id }}</div>
+              </div>
+              <div style="flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
+                {% if t.type == 'OUT' %}
+                  <span class="badge badge-primary">📤 Keluar</span>
+                {% elif t.type == 'IN' %}
+                  <span class="badge badge-success">📥 Masuk</span>
+                {% else %}
+                  <span class="badge badge-warning">⚖️ Adj.</span>
+                {% endif %}
+              </div>
+            </div>
+            <div class="mobile-card-tags">
+              <span style="font-size: 0.8rem; font-weight: 600; color: #334155;">
+                📍 {{ t.project_name or t.supplier_name or 'Internal' }}
+              </span>
+            </div>
+            <div class="mobile-card-body">
+              <div>
+                <div class="mobile-card-metric-label">Kuantitas</div>
+                <div class="mobile-card-metric-val">{{ t.total_qty }}<span style="font-size: 0.75rem; font-weight: 500; color: #64748b;"> unit</span></div>
+                <div style="font-size: 0.68rem; color: #94a3b8;">{{ t.item_count }} item</div>
+              </div>
+              <div>
+                <div class="mobile-card-metric-label">Total Nilai</div>
+                <div class="mobile-card-metric-val" style="font-size: 0.85rem; color: #1d4ed8;">{{ t.total_amount | rupiah }}</div>
+              </div>
+              {% if t.vehicle_number or t.driver_name %}
+              <div class="mobile-card-col-full" style="font-size: 0.78rem; color: #64748b;">
+                🚗 {{ t.vehicle_number or '-' }}{% if t.driver_name %} &bull; {{ t.driver_name }}{% endif %}
+              </div>
+              {% endif %}
+            </div>
+            <div style="border-top: 1px solid var(--border-color); padding-top: 0.6rem; margin-top: 0.5rem;">
+              <a href="{{ url_for('view_slip', tx_id=t.id) }}" class="btn btn-outline btn-sm" style="width: 100%; justify-content: center;">
+                🖨️ Lihat &amp; Cetak Surat Jalan
+              </a>
+            </div>
+          </div>
+        {% else %}
+          <div style="padding: 3rem; text-align: center; color: #94a3b8;">
+            <div style="font-size: 2.5rem; margin-bottom: 0.75rem;">📭</div>
+            <div style="font-weight: 600;">Belum ada transaksi yang tercatat.</div>
+          </div>
+        {% endfor %}
+      </div>
+
+    </div>
+  </div>
+
+</div>
+{% endblock %}

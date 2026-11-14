@@ -1,0 +1,15 @@
+# Database SQLite & Backups (Kerahasiaan Data)
+*.db
+*.sqlite3
+backups/
+downloads/
+
+# Server Runtime & Logs
+server.log
+.server.pid
+__pycache__/
+*.py[cod]
+
+# Environment variables & local secrets
+.env
+.env.local
