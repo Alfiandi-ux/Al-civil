@@ -37,6 +37,13 @@ jobs:
         with:
           gradle-version: '8.4'
 
+      - name: Sync Python Source Files
+        run: |
+          mkdir -p android/app/src/main/python
+          cp app.py database.py android/app/src/main/python/
+          cp -r templates static android/app/src/main/python/
+          ls -la android/app/src/main/python/
+
       - name: Generate Release Keystore
         working-directory: ./android/app
         run: |
