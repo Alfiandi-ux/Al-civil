@@ -23,6 +23,16 @@ env/
 .env
 .env.local
 
+# Android Build Outputs & Gradle Caches
+.gradle/
+build/
+android/.gradle/
+android/build/
+android/app/build/
+*.apk
+*.aab
+*.keystore
+
 # OS / editor junk
 .DS_Store
 Thumbs.db

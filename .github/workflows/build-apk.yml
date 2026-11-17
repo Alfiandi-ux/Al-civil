@@ -1,0 +1,107 @@
+name: Build & Release Android APK
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    name: Build AL-CIVIL APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Java JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle 8.4
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.4'
+
+      - name: Generate Release Keystore
+        working-directory: ./android/app
+        run: |
+          if [ ! -f release.keystore ]; then
+            echo "Generating release keystore..."
+            keytool -genkey -v \
+              -keystore release.keystore \
+              -alias alcivil \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -storepass alcivil123 \
+              -keypass alcivil123 \
+              -dname "CN=AL-CIVIL WMS, OU=Civil, O=AlCivil, L=Jakarta, C=ID"
+          fi
+
+      - name: Build APK with Gradle
+        working-directory: ./android
+        run: |
+          gradle assembleRelease --stacktrace
+
+      - name: Prepare APK Asset
+        run: |
+          mkdir -p build-output
+          cp android/app/build/outputs/apk/release/*.apk build-output/al-civil.apk
+          echo "Generated APK:"
+          ls -lh build-output/al-civil.apk
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: al-civil-apk
+          path: build-output/al-civil.apk
+          retention-days: 30
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'latest-apk' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'AL-CIVIL Android APK (Versi Siap Pakai)' }}
+          body: |
+            ### 🏗️ AL-CIVIL WAREHOUSE MANAGEMENT SYSTEM - ANDROID APK
+
+            Aplikasi Android mandiri (*Standalone APK*) untuk manajemen gudang & logistik material teknik sipil.
+
+            #### 📲 Unduh & Pasang:
+            1. Klik **`al-civil.apk`** pada bagian **Assets** di bawah untuk mengunduh langsung ke HP Android.
+            2. Buka file yang selesai diunduh, lalu pilih **Install / Pasang**.
+            3. Jika muncul peringatan keamanan *"Izinkan instalasi dari sumber ini / неизвестный источник"*, pilih **Izinkan (Allow)**.
+            4. Buka aplikasi **AL-CIVIL** di layar utama Android.
+
+            ---
+
+            #### ⚡ Keunggulan Aplikasi APK:
+            - **100% Offline Standalone**: Server Flask & Database SQLite sudah tersemat langsung di dalam APK. Tidak membutuhkan instalasi Termux atau Python lagi di HP penerima.
+            - **Mode Kamera Scanner Barcode**: Langsung pindai barcode kemasan/surat material melalui kamera HP dengan izin otomatis.
+            - **Penyimpanan Aman**: Database otomatis tersimpan di memori internal aplikasi HP dan tidak hilang saat aplikasi ditutup.
+            - **Backup & Ekspor CSV**: Riwayat transaksi dan inventaris bisa diekspor atau dicadangkan langsung ke folder Download HP.
+            - **Dual Mode (Lokal / Klien WiFi)**: Bisa berjalan offline sendiri atau dihubungkan ke server Termux utama di kantor lapangan lewat WiFi.
+          files: build-output/al-civil.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

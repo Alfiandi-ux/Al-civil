@@ -22,6 +22,35 @@
     </div>
   </div>
 
+  <!-- Tab Material Aktif / Arsip -->
+  <div class="archive-tabs" style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.25rem;">
+    <a href="{{ url_for('inventory') }}"
+       class="btn {% if status_filter != 'archived' %}btn-primary{% else %}btn-outline{% endif %}"
+       style="display: inline-flex; align-items: center; gap: 0.5rem;">
+      📦 Material Aktif
+      <span class="badge badge-neutral">{{ active_count }}</span>
+    </a>
+    <a href="{{ url_for('inventory', status='archived') }}"
+       class="btn {% if status_filter == 'archived' %}btn-primary{% else %}btn-outline{% endif %}"
+       style="display: inline-flex; align-items: center; gap: 0.5rem;">
+      🗂️ Material Diarsipkan
+      <span class="badge badge-warning">{{ archived_count }}</span>
+    </a>
+  </div>
+
+  {% if status_filter == 'archived' %}
+  <div class="card" style="margin-bottom: 1.25rem; border-left: 4px solid #f59e0b;">
+    <div class="card-body" style="padding: 0.9rem 1rem; display: flex; gap: 0.6rem; align-items: flex-start;">
+      <span style="font-size: 1.1rem;">ℹ️</span>
+      <div style="font-size: 0.85rem; color: #475569;">
+        <strong>Arsip material.</strong> Material di sini tidak muncul pada transaksi baru maupun
+        daftar aktif. Data historisnya tetap tersimpan. Klik <strong>♻️ Pulihkan</strong> untuk
+        mengaktifkan kembali.
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Filters & Search Toolbar -->
   <div class="card" style="margin-bottom: 1.25rem;">
     <div class="card-body" style="padding: 1rem;">
@@ -125,6 +154,9 @@
                 <td style="text-align: center;">
                   {% if m.is_active == 0 %}
                     <span class="badge badge-neutral" style="background: #e2e8f0; color: #475569;">Diarsipkan</span>
+                    {% if m.archived_at %}
+                      <div style="font-size: 0.68rem; color: #94a3b8; margin-top: 3px;">Sejak {{ m.archived_at[:10] }}</div>
+                    {% endif %}
                   {% elif m.stock <= m.min_stock %}
                     <span class="badge badge-danger">Kritis</span>
                   {% else %}
@@ -153,8 +185,17 @@
             {% else %}
               <tr>
                 <td colspan="9" style="text-align: center; padding: 3rem; color: #64748b;">
-                  <div style="font-size: 2rem; margin-bottom: 0.5rem;">🔍</div>
-                  <p>Tidak ada material yang cocok dengan filter pencarian.</p>
+                  <div style="font-size: 2rem; margin-bottom: 0.5rem;">{% if status_filter == 'archived' %}🗂️{% else %}🔍{% endif %}</div>
+                  {% if status_filter == 'archived' %}
+                    <p>Belum ada material yang diarsipkan.</p>
+                  {% else %}
+                    <p>Belum ada material aktif yang cocok dengan filter pencarian.</p>
+                    {% if archived_count %}
+                      <a href="{{ url_for('inventory', status='archived') }}" class="btn btn-outline btn-sm" style="margin-top: 0.75rem;">
+                        🗂️ Lihat {{ archived_count }} material di arsip
+                      </a>
+                    {% endif %}
+                  {% endif %}
                 </td>
               </tr>
             {% endfor %}
@@ -184,6 +225,11 @@
             <div class="mobile-card-tags">
               <span class="badge badge-neutral">{{ m.category }}</span>
               <span style="font-size: 0.72rem; color: #64748b;">📍 {{ m.location }}</span>
+              {% if m.is_active == 0 %}
+                <span class="badge badge-warning" style="background: #fef3c7; color: #92400e;">
+                  🗂️ Diarsipkan{% if m.archived_at %} {{ m.archived_at[:10] }}{% endif %}
+                </span>
+              {% endif %}
             </div>
             <div class="mobile-card-body">
               <div>
@@ -225,8 +271,17 @@
           </div>
         {% else %}
           <div style="padding: 2.5rem; text-align: center; color: #64748b;">
-            <div style="font-size: 2rem; margin-bottom: 0.5rem;">🔍</div>
-            <p>Tidak ada material yang cocok.</p>
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">{% if status_filter == 'archived' %}🗂️{% else %}🔍{% endif %}</div>
+            {% if status_filter == 'archived' %}
+              <p>Belum ada material yang diarsipkan.</p>
+            {% else %}
+              <p>Belum ada material aktif yang cocok.</p>
+              {% if archived_count %}
+                <a href="{{ url_for('inventory', status='archived') }}" class="btn btn-outline btn-sm" style="margin-top: 0.75rem;">
+                  🗂️ Lihat {{ archived_count }} material di arsip
+                </a>
+              {% endif %}
+            {% endif %}
           </div>
         {% endfor %}
       </div>

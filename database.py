@@ -6,7 +6,8 @@ import sqlite3
 import os
 from datetime import datetime
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'alcivil.db')
+DATA_DIR = os.environ.get('ALCIVIL_DATA_DIR') or os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.environ.get('DB_PATH') or os.path.join(DATA_DIR, 'alcivil.db')
 
 def get_db():
     conn = sqlite3.connect(DB_PATH, timeout=10.0)
@@ -310,8 +311,11 @@ def generate_transaction_number(tx_type, cursor=None):
 # ==========================================================
 # BACKUP & RESTORE UTILITIES (MIGRASI DATA & SERVER)
 # ==========================================================
-BACKUP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'backups')
-os.makedirs(BACKUP_DIR, exist_ok=True)
+BACKUP_DIR = os.path.join(DATA_DIR, 'backups')
+try:
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+except Exception:
+    pass
 
 def format_file_size(bytes_val):
     for unit in ['B', 'KB', 'MB', 'GB']:

@@ -48,6 +48,23 @@ Aplikasi manajemen pergudangan material konstruksi dan teknik sipil dirancang kh
 
 ---
 
+## 📲 Unduh Aplikasi Android (APK) Siap Pakai
+
+Untuk perangkat Android lain yang tidak menggunakan Termux atau ingin langsung memakai aplikasi AL-CIVIL seperti aplikasi biasa:
+
+1. Kunjungi halaman rilis di browser HP: **[Download APK AL-CIVIL Terbaru](https://github.com/Alfiandi-ux/Al-civil/releases)**
+2. Pada rilis terbaru (*Latest Release*), unduh file **`al-civil.apk`** yang ada di bagian **Assets**.
+3. Buka file yang selesai diunduh lalu pilih **Install / Pasang**.
+4. Jika muncul konfirmasi keamanan *"Izinkan instalasi dari sumber tidak dikenal"*, pilih **Izinkan (Allow)**.
+5. Buka aplikasi **AL-CIVIL** di layar utama Android — server Python lokal dan database otomatis aktif 100% offline tanpa perlu menginstal Termux atau Python manual di HP tersebut!
+
+> [!TIP]
+> **Opsi Jaringan (Dual-Mode):**
+> - **Mode Mandiri (Offline / Standalone)**: Database & server Flask berjalan langsung di dalam HP pengguna.
+> - **Mode Klien (Multi-User via WiFi Proyek)**: Jika mandor / checker lapangan ingin terhubung ke server utama di kantor direksi keet, cukup tap tombol *"⚙️ Hubungkan ke Server Lain"* di layar pembuka dan masukkan IP server (contoh: `http://192.168.1.15:5000`).
+
+---
+
 ## 📱 Optimalisasi Khusus Android & Termux
 
 Aplikasi gudang ini telah dioptimalkan khusus untuk lingkungan **Android & Termux**:

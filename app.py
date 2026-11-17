@@ -24,7 +24,12 @@ try:
 except ImportError:
     pass
 
-app = Flask(__name__)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+app = Flask(
+    __name__,
+    template_folder=os.path.join(BASE_DIR, 'templates'),
+    static_folder=os.path.join(BASE_DIR, 'static')
+)
 # SECRET_KEY wajib diisi lewat environment saat deploy publik.
 # Fallback acak hanya untuk pemakaian lokal, sehingga tidak ada kunci rahasia
 # yang ikut ter-commit ke repositori.
@@ -209,9 +214,16 @@ def inventory():
     cursor.execute(query, params)
     materials = [dict(row) for row in cursor.fetchall()]
 
-    # List of unique categories for filter (hanya material aktif)
-    cursor.execute("SELECT DISTINCT category FROM materials WHERE is_active = 1 ORDER BY category ASC")
+    # Daftar kategori mengikuti status yang sedang dilihat agar filter tetap relevan
+    category_flag = 0 if status_filter == 'archived' else 1
+    cursor.execute(
+        "SELECT DISTINCT category FROM materials WHERE is_active = ? ORDER BY category ASC",
+        (category_flag,)
+    )
     categories = [row[0] for row in cursor.fetchall()]
+
+    cursor.execute("SELECT COUNT(*) FROM materials WHERE is_active = 1")
+    active_count = cursor.fetchone()[0]
 
     cursor.execute("SELECT COUNT(*) FROM materials WHERE is_active = 0")
     archived_count = cursor.fetchone()[0]
@@ -220,6 +232,7 @@ def inventory():
     return render_template('inventory.html',
                            materials=materials,
                            categories=categories,
+                           active_count=active_count,
                            archived_count=archived_count,
                            search=search,
                            current_category=category,
@@ -1235,6 +1248,12 @@ def system_status():
         'platform': 'Android / Termux',
         'timestamp': datetime.now().isoformat()
     })
+
+def start_android_server(port=5000):
+    """Fungsi pembantu yang dipanggil dari runtime Java Android (Chaquopy)."""
+    with app.app_context():
+        database.init_db()
+    app.run(host='127.0.0.1', port=int(port), debug=False, threaded=True)
 
 if __name__ == '__main__':
     # Optimized for Android/Termux:
