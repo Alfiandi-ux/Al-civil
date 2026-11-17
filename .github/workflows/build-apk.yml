@@ -32,9 +32,6 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Set up Gradle 8.4
         uses: gradle/actions/setup-gradle@v3
         with:
