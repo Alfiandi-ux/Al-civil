@@ -6,6 +6,7 @@ import os
 import csv
 import io
 import json
+import math
 import secrets
 import sqlite3
 import threading
@@ -988,6 +989,15 @@ def api_create_transaction():
     operator_name = clean(data.get('operator_name'), 'Petugas Gudang AL-CIVIL') or 'Petugas Gudang AL-CIVIL'
     notes = clean(data.get('notes'))
 
+    # Penerimaan barang (IN) boleh membawa harga beli aktual per item. Bila
+    # klien lama tidak mengirim flag ini, default-nya harga master ikut
+    # diperbarui (perilaku yang diharapkan pada mode penerimaan).
+    update_price_raw = data.get('update_price', True)
+    if isinstance(update_price_raw, str):
+        update_price = update_price_raw.strip().lower() in ('1', 'true', 'yes', 'on')
+    else:
+        update_price = bool(update_price_raw)
+
     conn = database.get_db()
     cursor = conn.cursor()
 
@@ -1004,11 +1014,11 @@ def api_create_transaction():
             try:
                 mat_id = int(item.get('material_id'))
                 qty = float(item.get('qty'))
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, OverflowError):
                 raise ValueError("ID material atau kuantitas barang tidak valid.")
 
-            if qty <= 0:
-                raise ValueError("Kuantitas setiap barang harus lebih dari 0.")
+            if not math.isfinite(qty) or qty <= 0:
+                raise ValueError("Kuantitas setiap barang harus berupa angka lebih dari 0.")
 
             if mat_id not in materials_by_id:
                 cursor.execute(
@@ -1023,15 +1033,37 @@ def api_create_transaction():
             mat = materials_by_id[mat_id]
             requested_qty[mat_id] = requested_qty.get(mat_id, 0) + qty
 
-            # Gunakan data master (bukan data kiriman browser) agar dokumen
-            # selalu memuat SKU/nama/satuan/harga yang benar.
+            master_price = float(mat['unit_price'] or 0)
+
+            # Untuk OUT, harga selalu dari master agar nilai surat jalan tidak
+            # bisa dimanipulasi dari browser. Untuk IN, harga beli aktual dari
+            # form penerimaan dipakai dan (opsional) disimpan ke master.
+            if tx_type == 'IN' and item.get('unit_price') not in (None, ''):
+                try:
+                    unit_price = float(item.get('unit_price'))
+                except (TypeError, ValueError, OverflowError):
+                    raise ValueError(
+                        f"Harga satuan untuk '{mat['name']}' tidak valid."
+                    )
+                if not math.isfinite(unit_price) or unit_price < 0:
+                    raise ValueError(
+                        f"Harga satuan untuk '{mat['name']}' harus berupa angka 0 atau lebih."
+                    )
+            else:
+                unit_price = master_price
+
+            if not math.isfinite(unit_price * qty):
+                raise ValueError(
+                    f"Nilai total untuk '{mat['name']}' terlalu besar / tidak valid."
+                )
+
             normalized_items.append({
                 'material_id': mat_id,
                 'sku': mat['sku'],
                 'material_name': mat['name'],
                 'unit': mat['unit'],
                 'qty': qty,
-                'unit_price': float(mat['unit_price'] or 0),
+                'unit_price': unit_price,
                 'notes': clean(item.get('notes'))
             })
 
@@ -1071,6 +1103,8 @@ def api_create_transaction():
         total_items_count = len(normalized_items)
         total_qty = sum(i['qty'] for i in normalized_items)
         total_amount = sum(i['qty'] * i['unit_price'] for i in normalized_items)
+        if not math.isfinite(total_qty) or not math.isfinite(total_amount):
+            raise ValueError("Total kuantitas / nilai transaksi tidak valid.")
 
         # Kunci proses tulis supaya nomor dokumen + stok selalu konsisten
         # meskipun ada dua request transaksi bersamaan.
@@ -1123,14 +1157,55 @@ def api_create_transaction():
                         WHERE id = ?
                     """, (qty, mat_id))
 
+            # Penerimaan (IN): perbarui harga master material ke harga beli
+            # aktual yang diisi petugas. Bila material yang sama muncul lebih
+            # dari sekali, gunakan rata-rata tertimbang kuantitasnya.
+            price_updates = []
+            if tx_type == 'IN' and update_price:
+                received_qty = {}
+                received_value = {}
+                for item in normalized_items:
+                    mid = item['material_id']
+                    received_qty[mid] = received_qty.get(mid, 0) + item['qty']
+                    received_value[mid] = received_value.get(mid, 0) + (
+                        item['qty'] * item['unit_price']
+                    )
+
+                for mid, qty in received_qty.items():
+                    avg_price = received_value[mid] / qty
+                    if not math.isfinite(avg_price):
+                        raise ValueError(
+                            f"Harga rata-rata material ID {mid} tidak valid."
+                        )
+                    new_price = round(avg_price, 2)
+                    old_price = float(materials_by_id[mid]['unit_price'] or 0)
+                    if abs(new_price - old_price) < 0.005:
+                        continue
+                    cursor.execute("""
+                        UPDATE materials
+                        SET unit_price = ?, updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                    """, (new_price, mid))
+                    price_updates.append({
+                        'material_id': mid,
+                        'name': materials_by_id[mid]['name'],
+                        'old_price': old_price,
+                        'new_price': new_price
+                    })
+
             conn.commit()
+
+        message = f"Transaksi {tx_number} berhasil diproses!"
+        if tx_type == 'IN' and price_updates:
+            message += f" Harga master {len(price_updates)} material diperbarui."
 
         return jsonify({
             'success': True,
             'transaction_id': tx_id,
             'transaction_number': tx_number,
             'slip_url': url_for('view_slip', tx_id=tx_id),
-            'message': f"Transaksi {tx_number} berhasil diproses!"
+            'price_updates': price_updates,
+            'message': message
         })
 
     except Exception as e:

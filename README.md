@@ -13,6 +13,7 @@ Aplikasi manajemen pergudangan material konstruksi dan teknik sipil dirancang kh
    - Dual-Mode: **Pengeluaran Material (Surat Jalan ke Proyek)** dan **Penerimaan Material (dari Supplier)**.
    - Quick Tiles untuk material sipil yang sering keluar (1-klik tambah).
    - Validasi stok fisik real-time (mencegah over-dispatch dengan peringatan visual).
+   - **Update Harga Beli saat Penerimaan:** isi harga satuan aktual per item; harga master material otomatis diperbarui (dapat dinonaktifkan) sehingga valuasi stok dan transaksi berikutnya memakai harga terbaru.
    - Pengisian otomatis nomor polisi armada, nama mandor, dan penerima proyek.
 
 2. **📄 Penerbitan Dokumen Resmi & Printable Slip:**

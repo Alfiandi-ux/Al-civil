@@ -23,6 +23,37 @@
   .pos-panel {
     overflow: visible;
   }
+
+  /* Input harga beli pada mode penerimaan (IN) */
+  .cart-price-control {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 5px;
+    flex-wrap: wrap;
+  }
+  .cart-price-control label {
+    margin: 0;
+    font-size: 0.7rem;
+    color: #64748b;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .cart-price-input {
+    max-width: 150px;
+    padding: 3px 7px;
+    font-size: 0.8rem;
+    font-weight: 700;
+  }
+  @media (max-width: 640px) {
+    .cart-price-control label {
+      white-space: normal;
+    }
+    .cart-price-input {
+      max-width: 100%;
+      width: 100%;
+    }
+  }
 </style>
 {% endblock %}
 
@@ -193,6 +224,19 @@
             </select>
           </div>
 
+          <!-- Inbound: opsi update harga master -->
+          <div class="form-group" id="updatePriceGroup" style="display: none;">
+            <label class="form-label" style="display: flex; align-items: flex-start; gap: 0.55rem; cursor: pointer; text-transform: none; letter-spacing: 0; margin-bottom: 0.2rem;">
+              <input type="checkbox" id="formUpdatePrice" checked
+                     style="margin-top: 3px; width: 18px; height: 18px; flex: 0 0 auto; accent-color: #2f5cff;">
+              <span>Perbarui harga master material sesuai harga penerimaan ini</span>
+            </label>
+            <small style="display: block; color: #64748b; font-size: 0.72rem; line-height: 1.35;">
+              Harga master dipakai untuk valuasi stok dan transaksi berikutnya.
+              Hilangkan centang bila harga ini hanya berlaku untuk penerimaan saat ini.
+            </small>
+          </div>
+
           <!-- Vehicle & Mandor Details -->
           <div class="form-grid-2">
             <div class="form-group">
@@ -299,7 +343,7 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="{{ url_for('static', filename='js/quick_trans.js', v=7) }}"></script>
+<script src="{{ url_for('static', filename='js/quick_trans.js', v=8) }}"></script>
 <script>
 // Mobile tab switching for POS
 function switchMobileTab(tab) {

@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let searchResults = [];
   let searchResultsQuery = '';
   let focusedResultIndex = -1;
+  let isSubmitting = false; // Cegah double-submit lewat F9 / klik ganda
 
   // DOM Elements
   const btnTypeOut = document.getElementById('btnTypeOut');
@@ -29,6 +30,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const formDriver = document.getElementById('formDriver');
   const formOperator = document.getElementById('formOperator');
   const formNotes = document.getElementById('formNotes');
+  const updatePriceGroup = document.getElementById('updatePriceGroup');
+  const formUpdatePrice = document.getElementById('formUpdatePrice');
 
   // Success Modal Elements
   const successModal = document.getElementById('successModal');
@@ -48,12 +51,14 @@ document.addEventListener('DOMContentLoaded', () => {
       btnTypeIn.className = 'pos-type-btn';
       projectSelectGroup.style.display = 'block';
       supplierSelectGroup.style.display = 'none';
+      if (updatePriceGroup) updatePriceGroup.style.display = 'none';
       btnSubmitTransaction.innerHTML = `<span>🚀 Proses & Terbitkan Surat Jalan</span> <span class="kbd-badge">F9</span>`;
     } else {
       btnTypeIn.className = 'pos-type-btn active inbound';
       btnTypeOut.className = 'pos-type-btn';
       projectSelectGroup.style.display = 'none';
       supplierSelectGroup.style.display = 'block';
+      if (updatePriceGroup) updatePriceGroup.style.display = 'block';
       btnSubmitTransaction.innerHTML = `<span>📥 Proses Penerimaan Material</span> <span class="kbd-badge">F9</span>`;
     }
     renderCart();
@@ -273,6 +278,7 @@ document.addEventListener('DOMContentLoaded', () => {
         unit: material.unit,
         stock: material.stock,
         unit_price: material.unit_price,
+        master_price: material.unit_price,
         qty: 1,
         notes: ''
       });
@@ -280,6 +286,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     showToast(`Ditambahkan: ${material.name}`, 'success');
     renderCart();
+  }
+
+  // Harga efektif: OUT memakai harga master (tidak bisa diubah dari browser),
+  // IN memakai harga beli yang diisi petugas pada baris keranjang.
+  function getEffectivePrice(item) {
+    const raw = currentTxType === 'OUT'
+      ? (item.master_price != null ? item.master_price : item.unit_price)
+      : item.unit_price;
+    const price = Number(raw);
+    return Number.isFinite(price) ? price : 0;
   }
 
   function renderCart() {
@@ -300,7 +316,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let html = '';
     cart.forEach((item, index) => {
-      const lineTotal = item.qty * item.unit_price;
+      const unitPrice = getEffectivePrice(item);
+      const lineTotal = item.qty * unitPrice;
       totalQty += Number(item.qty);
       totalVal += lineTotal;
 
@@ -312,11 +329,22 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="cart-item-name">${escapeHtml(item.material_name)}</div>
             <div class="cart-item-meta">
               SKU: ${escapeHtml(item.sku)} | Sisa Stok: <b>${item.stock} ${escapeHtml(item.unit)}</b>
+              | Harga: <b>${formatRupiah(unitPrice)}</b> / ${escapeHtml(item.unit)}
               ${isOverStock ? '<span class="badge badge-danger" style="margin-left: 6px;">Melebihi Stok!</span>' : ''}
             </div>
             <input type="text" class="form-control form-control-sm cart-item-notes"
                    placeholder="Catatan batch/lot/spesifikasi..." value="${escapeHtml(item.notes || '')}"
                    onchange="window.updateCartItemNotes(${index}, this.value)">
+            ${currentTxType === 'IN' ? `
+              <div class="cart-price-control">
+                <label for="cartPrice${index}">Harga beli / satuan (Rp):</label>
+                <input type="number" min="0" step="any" id="cartPrice${index}"
+                       class="form-control form-control-sm cart-price-input"
+                       data-index="${index}"
+                       value="${escapeHtml(String(item.unit_price ?? ''))}"
+                       onchange="window.updateCartItemPrice(${index}, this.value)">
+              </div>
+            ` : ''}
           </td>
           <td class="cart-cell-qty">
             <div class="cart-qty-control">
@@ -378,6 +406,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
+  window.updateCartItemPrice = function(index, val) {
+    if (!cart[index]) return;
+    const price = parseFloat(val);
+    if (!Number.isFinite(price) || price < 0) {
+      showToast('Harga satuan harus berupa angka 0 atau lebih.', 'danger');
+      renderCart(); // kembalikan input ke harga sebelumnya yang valid
+      return;
+    }
+    cart[index].unit_price = price;
+    renderCart();
+  };
+
   window.removeCartItem = function(index) {
     if (cart[index]) {
       cart.splice(index, 1);
@@ -399,6 +439,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function processTransaction() {
+    // F9 bisa ditekan berkali-kali; jangan sampai membuat dokumen ganda.
+    if (isSubmitting) return;
+
     if (cart.length === 0) {
       showToast('Pilih minimal 1 material untuk melakukan transaksi!', 'danger');
       if (searchInput) searchInput.focus();
@@ -441,6 +484,22 @@ document.addEventListener('DOMContentLoaded', () => {
       supplierName = supOpt ? supOpt.text : '';
     }
 
+    // Sinkronkan harga yang masih diketik di input (mis. F9 ditekan sebelum
+    // input kehilangan fokus) agar nilai yang dikirim benar-benar yang terlihat.
+    if (currentTxType === 'IN') {
+      const priceInputs = document.querySelectorAll('.cart-price-input');
+      for (const input of priceInputs) {
+        const price = parseFloat(input.value);
+        const index = Number(input.dataset.index);
+        if (!Number.isFinite(price) || price < 0) {
+          showToast('Harga satuan setiap barang harus berupa angka 0 atau lebih!', 'danger');
+          input.focus();
+          return;
+        }
+        if (cart[index]) cart[index].unit_price = price;
+      }
+    }
+
     const payload = {
       type: currentTxType,
       project_id: projectId,
@@ -451,9 +510,13 @@ document.addEventListener('DOMContentLoaded', () => {
       driver_name: formDriver ? formDriver.value : '',
       operator_name: formOperator ? formOperator.value : 'Officer AL-CIVIL',
       notes: formNotes ? formNotes.value : '',
+      update_price: currentTxType === 'IN'
+        ? (formUpdatePrice ? formUpdatePrice.checked : true)
+        : false,
       items: cart
     };
 
+    isSubmitting = true;
     btnSubmitTransaction.disabled = true;
     btnSubmitTransaction.innerHTML = `<span>⏳ Menyimpan Transaksi...</span>`;
 
@@ -464,6 +527,7 @@ document.addEventListener('DOMContentLoaded', () => {
     })
       .then(res => res.json())
       .then(data => {
+        isSubmitting = false;
         btnSubmitTransaction.disabled = false;
         setTransactionType(currentTxType);
 
@@ -490,6 +554,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       })
       .catch(err => {
+        isSubmitting = false;
         btnSubmitTransaction.disabled = false;
         setTransactionType(currentTxType);
         showToast(`Terjadi kesalahan jaringan: ${err}`, 'danger');
