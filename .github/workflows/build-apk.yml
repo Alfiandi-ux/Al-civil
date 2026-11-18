@@ -44,26 +44,56 @@ jobs:
           cp -r templates static android/app/src/main/python/
           ls -la android/app/src/main/python/
 
-      - name: Generate Release Keystore
+      - name: Restore Release Keystore
         working-directory: ./android/app
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          if [ ! -f release.keystore ]; then
-            echo "Generating release keystore..."
-            keytool -genkey -v \
-              -keystore release.keystore \
-              -alias alcivil \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 10000 \
-              -storepass alcivil123 \
-              -keypass alcivil123 \
-              -dname "CN=AL-CIVIL WMS, OU=Civil, O=AlCivil, L=Jakarta, C=ID"
-          fi
+          missing=0
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::GitHub Secret $name belum diset. Jalankan android/scripts/setup-signing.sh sekali saja."
+              missing=1
+            fi
+          done
+          [ "$missing" -eq 0 ] || exit 1
+
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > release.keystore
+          chmod 600 release.keystore
+
+          # Pastikan password & alias benar sebelum build, gagal cepat bila salah.
+          keytool -list -keystore release.keystore -alias "$ANDROID_KEY_ALIAS" \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" > /dev/null
+          echo "Keystore rilis berhasil dipulihkan (alias: $ANDROID_KEY_ALIAS)."
 
       - name: Build APK with Gradle
         working-directory: ./android
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/android/app/release.keystore
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           gradle assembleRelease --stacktrace
+
+      - name: Verify APK Release Signature
+        run: |
+          set -euo pipefail
+          APK=$(find android/app/build/outputs/apk/release -name '*.apk' | head -n 1)
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          APKSIGNER=$(find "$SDK/build-tools" -name apksigner -type f | sort -V | tail -n 1)
+
+          echo "Memeriksa tanda tangan: $APK"
+          "$APKSIGNER" verify --print-certs "$APK"
+
+          if "$APKSIGNER" verify --print-certs "$APK" | grep -q "CN=Android Debug"; then
+            echo "::error::APK ditandatangani dengan debug key, bukan keystore rilis."
+            exit 1
+          fi
+          echo "Tanda tangan rilis valid."
 
       - name: Prepare APK Asset
         run: |

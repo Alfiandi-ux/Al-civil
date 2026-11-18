@@ -65,6 +65,42 @@ Untuk perangkat Android lain yang tidak menggunakan Termux atau ingin langsung m
 
 ---
 
+## 🔐 Kunci Tanda Tangan APK (Signing Key)
+
+Semua APK rilis **wajib ditandatangani dengan keystore yang sama** agar versi baru
+bisa dipasang sebagai pembaruan (tanpa uninstall). Keystore tidak disimpan di
+repositori; GitHub Actions memulihkannya dari *repository secrets*:
+
+| Secret | Isi |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64` | File `release.keystore` yang di-encode base64 |
+| `ANDROID_KEYSTORE_PASSWORD` | Password keystore |
+| `ANDROID_KEY_ALIAS` | Alias kunci (default `alcivil`) |
+| `ANDROID_KEY_PASSWORD` | Password kunci |
+
+Sekali saja, dari Termux/laptop:
+
+```bash
+gh auth login
+./android/scripts/setup-signing.sh
+```
+
+Skrip membuat `android/app/release.keystore`, menulis `android/keystore.properties`
+(untuk build lokal), lalu mengunggah keempat secret ke GitHub. Bila `gh` belum
+tersedia, skrip menampilkan nilai yang perlu diisi manual di
+**Settings → Secrets and variables → Actions**.
+
+> [!IMPORTANT]
+> Cadangkan `release.keystore` beserta password-nya di tempat aman (mis. password
+> manager). Jika file ini hilang, APK baru tidak dapat memperbarui aplikasi yang
+> sudah terpasang sehingga pengguna harus uninstall terlebih dahulu.
+>
+> Catatan: APK **v1.1.1** ditandatangani dengan kunci sementara yang sudah tidak
+> tersedia. Satu kali instalasi setelah perubahan ini perlu **uninstall dulu**;
+> rilis berikutnya akan bisa diperbarui normal.
+
+---
+
 ## 📱 Optimalisasi Khusus Android & Termux
 
 Aplikasi gudang ini telah dioptimalkan khusus untuk lingkungan **Android & Termux**:

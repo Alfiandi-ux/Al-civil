@@ -24,6 +24,10 @@ env/
 .env.local
 .secret_key
 
+# Android Signing (JANGAN pernah commit)
+android/keystore.properties
+android/app/*.jks
+
 # Android Build Outputs & Gradle Caches
 .gradle/
 build/

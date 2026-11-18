@@ -3,6 +3,32 @@ plugins {
     id 'com.chaquo.python'
 }
 
+// Kredensial signing rilis dibaca dari environment (CI) atau android/keystore.properties (lokal).
+// Jangan pernah menaruh password langsung di file ini.
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+}
+
+def releaseStoreFilePath = System.getenv("ANDROID_KEYSTORE_PATH") ?: keystoreProperties.getProperty("storeFile")
+def releaseStorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: keystoreProperties.getProperty("storePassword")
+def releaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS") ?: keystoreProperties.getProperty("keyAlias")
+def releaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD") ?: keystoreProperties.getProperty("keyPassword")
+
+def releaseKeystore = releaseStoreFilePath ? file(releaseStoreFilePath) : file("release.keystore")
+def hasReleaseSigning = releaseKeystore.exists() &&
+        releaseStorePassword && releaseKeyAlias && releaseKeyPassword
+
+def isReleaseTask = gradle.startParameter.taskNames.any { it.toLowerCase().contains("release") }
+if (System.getenv("CI") && isReleaseTask && !hasReleaseSigning) {
+    throw new GradleException(
+            "Build rilis di CI membutuhkan keystore produksi. " +
+            "Set secret ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, " +
+            "ANDROID_KEY_ALIAS, dan ANDROID_KEY_PASSWORD lewat android/scripts/setup-signing.sh."
+    )
+}
+
 android {
     namespace 'com.alcivil.wms'
     compileSdk 34
@@ -29,20 +55,22 @@ android {
 
     signingConfigs {
         release {
-            if (file("release.keystore").exists()) {
-                storeFile file("release.keystore")
-                storePassword "alcivil123"
-                keyAlias "alcivil"
-                keyPassword "alcivil123"
+            if (hasReleaseSigning) {
+                storeFile releaseKeystore
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
             }
         }
     }
 
     buildTypes {
         release {
-            if (file("release.keystore").exists()) {
+            if (hasReleaseSigning) {
                 signingConfig signingConfigs.release
             } else {
+                // Fallback untuk build debug lokal. APK ini TIDAK boleh dipublikasikan.
+                logger.warn("PERINGATAN: keystore rilis tidak ditemukan; APK ditandatangani dengan debug key.")
                 signingConfig signingConfigs.debug
             }
             minifyEnabled false
