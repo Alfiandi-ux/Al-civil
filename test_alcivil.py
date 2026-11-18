@@ -312,5 +312,20 @@ class AlCivilAppTests(unittest.TestCase):
         self.assertEqual(res_s.status_code, 200)
         self.assertIn('berhasil didaftarkan', res_s.data.decode('utf-8'))
 
+    def test_13_transactions_page(self):
+        """Membuka halaman /transaksi (Surat Jalan & Transaksi) dengan pagination dan filter"""
+        self.login_as('admin', 'NewSecurePassword2026!')
+        res = self.client.get('/transaksi')
+        self.assertEqual(res.status_code, 200)
+        self.assertIn('Surat Jalan', res.data.decode('utf-8'))
+
+        # Filter type OUT
+        res_filter = self.client.get('/transaksi?type=OUT')
+        self.assertEqual(res_filter.status_code, 200)
+
+        # Search
+        res_search = self.client.get('/transaksi?search=Pak')
+        self.assertEqual(res_search.status_code, 200)
+
 if __name__ == '__main__':
     unittest.main()

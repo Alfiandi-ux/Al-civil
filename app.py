@@ -484,28 +484,30 @@ def inventory():
     conn = database.get_db()
     cursor = conn.cursor()
 
-    query = "SELECT * FROM materials WHERE 1=1"
+    where_clauses = ["1=1"]
     params = []
 
     # Material yang diarsipkan hanya tampil saat filter "archived" dipilih.
     if status_filter == 'archived':
-        query += " AND is_active = 0"
+        where_clauses.append("is_active = 0")
     else:
-        query += " AND is_active = 1"
+        where_clauses.append("is_active = 1")
 
     if search:
-        query += " AND (name LIKE ? OR sku LIKE ? OR barcode LIKE ? OR location LIKE ?)"
+        where_clauses.append("(name LIKE ? OR sku LIKE ? OR barcode LIKE ? OR location LIKE ?)")
         term = f"%{search}%"
         params.extend([term, term, term, term])
 
     if category:
-        query += " AND category = ?"
+        where_clauses.append("category = ?")
         params.append(category)
 
     if status_filter == 'critical':
-        query += " AND stock <= min_stock"
+        where_clauses.append("stock <= min_stock")
     elif status_filter == 'safe':
-        query += " AND stock > min_stock"
+        where_clauses.append("stock > min_stock")
+
+    where_sql = " AND ".join(where_clauses)
 
     # Pagination: batasi jumlah baris agar halaman tetap ringan di HP.
     per_page = 100
@@ -514,14 +516,14 @@ def inventory():
     except (TypeError, ValueError):
         page = 1
 
-    count_query = "SELECT COUNT(*) FROM materials WHERE " + query.split(" WHERE ", 1)[1]
+    count_query = f"SELECT COUNT(*) FROM materials WHERE {where_sql}"
     cursor.execute(count_query, params)
     total_count = cursor.fetchone()[0]
     total_pages = max(1, math.ceil(total_count / per_page))
     page = min(page, total_pages)
 
-    cursor.execute(query + " ORDER BY category ASC, name ASC LIMIT ? OFFSET ?",
-                   params + [per_page, (page - 1) * per_page])
+    query = f"SELECT * FROM materials WHERE {where_sql} ORDER BY category ASC, name ASC LIMIT ? OFFSET ?"
+    cursor.execute(query, params + [per_page, (page - 1) * per_page])
     materials = [dict(row) for row in cursor.fetchall()]
 
     # Daftar kategori mengikuti status yang sedang dilihat agar filter tetap relevan
@@ -717,22 +719,19 @@ def transactions():
     conn = database.get_db()
     cursor = conn.cursor()
 
-    query = """
-        SELECT t.*, 
-               (SELECT COUNT(*) FROM transaction_items ti WHERE ti.transaction_id = t.id) as item_count
-        FROM transactions t
-        WHERE 1=1
-    """
+    where_clauses = ["1=1"]
     params = []
 
     if filter_type:
-        query += " AND t.type = ?"
+        where_clauses.append("t.type = ?")
         params.append(filter_type)
 
     if search:
-        query += " AND (t.transaction_number LIKE ? OR t.project_name LIKE ? OR t.vehicle_number LIKE ? OR t.driver_name LIKE ?)"
+        where_clauses.append("(t.transaction_number LIKE ? OR t.project_name LIKE ? OR t.vehicle_number LIKE ? OR t.driver_name LIKE ?)")
         s = f"%{search}%"
         params.extend([s, s, s, s])
+
+    where_sql = " AND ".join(where_clauses)
 
     per_page = 50
     try:
@@ -740,14 +739,20 @@ def transactions():
     except (TypeError, ValueError):
         page = 1
 
-    count_query = "SELECT COUNT(*) FROM transactions t WHERE " + query.split(" WHERE ", 1)[1]
+    count_query = f"SELECT COUNT(*) FROM transactions t WHERE {where_sql}"
     cursor.execute(count_query, params)
     total_count = cursor.fetchone()[0]
     total_pages = max(1, math.ceil(total_count / per_page))
     page = min(page, total_pages)
 
-    cursor.execute(query + " ORDER BY t.created_at DESC LIMIT ? OFFSET ?",
-                   params + [per_page, (page - 1) * per_page])
+    query = f"""
+        SELECT t.*, 
+               (SELECT COUNT(*) FROM transaction_items ti WHERE ti.transaction_id = t.id) as item_count
+        FROM transactions t
+        WHERE {where_sql}
+        ORDER BY t.created_at DESC LIMIT ? OFFSET ?
+    """
+    cursor.execute(query, params + [per_page, (page - 1) * per_page])
     tx_list = [dict(row) for row in cursor.fetchall()]
     conn.close()
 
