@@ -788,6 +788,66 @@ class BackupRestoreTests(unittest.TestCase):
                                data={'csrf_token': self.csrf()})
         self.assertEqual(res.status_code, 403)
 
+    def test_11_import_mendeteksi_isi_file_bukan_namanya(self):
+        """Backup valid harus diterima walau ekstensi hilang/tertukar (WebView Android)."""
+        self.login()
+        payload = database.backup_to_json()
+        json_bytes = json.dumps(payload).encode('utf-8')
+
+        _, snapshot_path = database.backup_to_sqlite()
+        with open(snapshot_path, 'rb') as f:
+            db_bytes = f.read()
+        self.assertTrue(db_bytes.startswith(b'SQLite format 3\x00'))
+
+        cases = [
+            ('backup_tanpa_ekstensi', json_bytes),
+            ('content', db_bytes),
+            ('data_tertukar.db', json_bytes),
+            ('data_tertukar.json', db_bytes),
+        ]
+        for name, content in cases:
+            with self.subTest(name=name):
+                res = self.client.post(
+                    '/backup/import',
+                    data={
+                        'csrf_token': self.csrf(),
+                        'import_mode': 'replace',
+                        'backup_file': (BytesIO(content), name),
+                    },
+                    content_type='multipart/form-data',
+                    follow_redirects=True,
+                )
+                html = res.data.decode('utf-8')
+                self.assertTrue(
+                    'berhasil diimpor' in html
+                    or 'berhasil dipulihkan dari database' in html,
+                    f"{name} ditolak: {html[:300]}"
+                )
+
+        # File kosong dan file sampah tetap harus ditolak dengan pesan jelas.
+        res = self.client.post(
+            '/backup/import',
+            data={
+                'csrf_token': self.csrf(),
+                'backup_file': (BytesIO(b''), 'kosong.db'),
+            },
+            content_type='multipart/form-data',
+            follow_redirects=True,
+        )
+        self.assertIn('kosong (0 byte)', res.data.decode('utf-8'))
+
+        res = self.client.post(
+            '/backup/import',
+            data={
+                'csrf_token': self.csrf(),
+                'backup_file': (BytesIO(b'bukan backup'), 'sampah'),
+            },
+            content_type='multipart/form-data',
+            follow_redirects=True,
+        )
+        self.assertIn('Format file tidak didukung',
+                      res.data.decode('utf-8'))
+
 
 if __name__ == '__main__':
     unittest.main()

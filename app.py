@@ -1137,6 +1137,31 @@ def export_transactions():
 # ==========================================
 # BACKUP & RESTORE DATA (MIGRASI SERVER / TERMUX)
 # ==========================================
+def _detect_backup_kind(file, ext):
+    """Deteksi jenis backup dari isi file, dengan ekstensi sebagai cadangan.
+
+    WebView Android kadang mengirim nama file sementara tanpa ekstensi,
+    sehingga isi file harus diperiksa agar backup valid tetap diterima.
+    """
+    try:
+        head = file.stream.read(4096)
+        file.stream.seek(0)
+    except Exception:
+        return None
+
+    head = head.lstrip(b'\xef\xbb\xbf \t\r\n')
+    if head.startswith(b'SQLite format 3\x00'):
+        return 'db'
+    if head.startswith(b'{') or head.startswith(b'['):
+        return 'json'
+
+    if ext in ('.db', '.sqlite', '.sqlite3'):
+        return 'db'
+    if ext == '.json':
+        return 'json'
+    return None
+
+
 def _safe_backup_path(filename):
     """Kembalikan path backup hanya jika berada di dalam folder backups/."""
     safe_name = secure_filename(filename)
@@ -1216,27 +1241,46 @@ def backup_download_file(filename):
 
 @app.route('/backup/import', methods=['POST'])
 def backup_import():
-    if 'backup_file' not in request.files:
+    file = request.files.get('backup_file')
+    if not file:
         flash("⚠️ Silakan pilih file backup (.db atau .json) yang ingin diimpor.", "danger")
         return redirect(url_for('backup_view'))
 
-    file = request.files['backup_file']
-    if not file or file.filename == '':
-        flash("⚠️ Tidak ada file yang dipilih.", "danger")
-        return redirect(url_for('backup_view'))
-
-    filename = secure_filename(file.filename)
+    filename = secure_filename(file.filename or '')
     ext = os.path.splitext(filename)[1].lower()
 
-    if ext not in ['.db', '.sqlite', '.sqlite3', '.json']:
-        flash("⚠️ Format file tidak didukung! Gunakan file .db atau .json hasil backup AL-CIVIL.", "danger")
+    try:
+        file.stream.seek(0, os.SEEK_END)
+        file_size = file.stream.tell()
+        file.stream.seek(0)
+    except Exception:
+        file_size = None
+    if file_size == 0:
+        app.logger.warning("Impor backup ditolak: file kosong (nama=%r)", filename)
+        flash("⚠️ File yang dipilih kosong (0 byte). Pilih ulang file backup.", "danger")
+        return redirect(url_for('backup_view'))
+
+    # Deteksi jenis backup dari isi file. Pemilih file Android/WebView kadang
+    # memberi nama sementara tanpa ekstensi (mis. "content"), sehingga backup
+    # yang sah tidak boleh ditolak hanya karena ekstensinya hilang.
+    kind = _detect_backup_kind(file, ext)
+    if kind is None:
+        app.logger.warning(
+            "Impor backup ditolak: nama=%r ekstensi=%r (isi tidak dikenali)",
+            filename, ext
+        )
+        flash(
+            "⚠️ Format file tidak didukung! Gunakan file .db atau .json hasil "
+            "backup AL-CIVIL (isi file tidak dikenali).",
+            "danger"
+        )
         return redirect(url_for('backup_view'))
 
     import_mode = request.form.get('import_mode', 'replace')
     if import_mode not in ('replace', 'merge'):
         import_mode = 'replace'
 
-    if ext in ['.db', '.sqlite', '.sqlite3']:
+    if kind == 'db':
         temp_path = os.path.join(
             database.BACKUP_DIR,
             f"temp_upload_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}_{secrets.token_hex(4)}.db"
@@ -1261,9 +1305,9 @@ def backup_import():
                     os.remove(temp_path)
                 except Exception:
                     pass
-    elif ext == '.json':
+    else:
         try:
-            content = file.read().decode('utf-8')
+            content = file.read().decode('utf-8-sig')
             payload = json.loads(content)
             with tx_write_lock:
                 success, msg = database.restore_from_json(payload, mode=import_mode)
