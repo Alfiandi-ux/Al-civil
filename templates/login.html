@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+  <meta name="theme-color" content="#ffd93d">
+  <title>Masuk | AL-CIVIL Warehouse</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='icons/icon.svg') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192.png') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Archivo+Black&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=10) }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/premium.css', v=6) }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/brutalist.css', v=1) }}">
+  <style>
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 1.5rem 1rem;
+      background: var(--nb-paper);
+    }
+    .login-container {
+      width: 100%;
+      max-width: 440px;
+    }
+    .login-brand {
+      text-align: center;
+      margin-bottom: 1.75rem;
+    }
+    .login-brand-icon {
+      width: 64px;
+      height: 64px;
+      margin: 0 auto 0.75rem auto;
+      background: var(--nb-yellow);
+      border: 3px solid var(--nb-ink);
+      box-shadow: 4px 4px 0 var(--nb-ink);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+    }
+    .login-brand h1 {
+      font-family: 'Archivo Black', 'Space Grotesk', sans-serif;
+      font-size: 1.85rem;
+      color: var(--nb-ink);
+      letter-spacing: -0.5px;
+      margin: 0;
+      line-height: 1.2;
+    }
+    .login-brand p {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #555;
+      margin: 0.35rem 0 0 0;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .login-card {
+      background: var(--nb-white);
+      border: 3px solid var(--nb-ink);
+      box-shadow: 6px 6px 0 var(--nb-ink);
+      border-radius: 4px;
+      padding: 2rem 1.75rem;
+    }
+    .password-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .password-wrapper input {
+      padding-right: 3rem;
+    }
+    .password-toggle-btn {
+      position: absolute;
+      right: 0.6rem;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      font-size: 1.15rem;
+      color: #666;
+      padding: 0.25rem 0.5rem;
+      line-height: 1;
+    }
+    .default-hint {
+      margin-top: 1.5rem;
+      background: var(--nb-yellow-soft);
+      border: 2px solid var(--nb-ink);
+      box-shadow: 3px 3px 0 var(--nb-ink);
+      padding: 0.85rem 1rem;
+      border-radius: 4px;
+      font-size: 0.82rem;
+      color: var(--nb-ink);
+    }
+    .login-footer-info {
+      text-align: center;
+      margin-top: 1.5rem;
+      font-size: 0.75rem;
+      color: #666;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="login-container">
+    <!-- Brand Header -->
+    <div class="login-brand">
+      <div class="login-brand-icon">🏗️</div>
+      <h1>AL-CIVIL</h1>
+      <p>Civil &amp; Construction Warehouse System</p>
+    </div>
+
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div style="margin-bottom: 1.25rem;">
+          {% for category, message in messages %}
+            <div class="flash-alert flash-{{ category }}" style="margin-bottom: 0.5rem;">
+              <div style="display: flex; align-items: center; gap: 0.6rem;">
+                <span>{% if category == 'success' %}✅{% elif category == 'danger' %}⚠️{% else %}ℹ️{% endif %}</span>
+                <span style="font-size: 0.88rem; font-weight: 600;">{{ message }}</span>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <!-- Login Card -->
+    <div class="login-card">
+      <h2 style="font-size: 1.25rem; font-weight: 800; margin: 0 0 1.25rem 0; color: var(--nb-ink); border-bottom: 2px solid var(--nb-ink); padding-bottom: 0.5rem;">
+        🔐 Masuk ke Sistem
+      </h2>
+
+      <form method="POST" action="{{ url_for('login') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% if next_url %}
+          <input type="hidden" name="next" value="{{ next_url }}">
+        {% endif %}
+
+        <div class="form-group" style="margin-bottom: 1.15rem;">
+          <label style="display: block; font-weight: 700; font-size: 0.88rem; margin-bottom: 0.4rem; color: var(--nb-ink);">
+            👤 Username
+          </label>
+          <input type="text"
+                 name="username"
+                 id="usernameInput"
+                 class="form-control"
+                 placeholder="Masukkan username"
+                 required
+                 autofocus
+                 autocomplete="username"
+                 style="width: 100%; padding: 0.75rem 0.85rem; font-size: 0.95rem; font-weight: 600;">
+        </div>
+
+        <div class="form-group" style="margin-bottom: 1.4rem;">
+          <label style="display: block; font-weight: 700; font-size: 0.88rem; margin-bottom: 0.4rem; color: var(--nb-ink);">
+            🔑 Password
+          </label>
+          <div class="password-wrapper">
+            <input type="password"
+                   name="password"
+                   id="passwordInput"
+                   class="form-control"
+                   placeholder="Masukkan password"
+                   required
+                   autocomplete="current-password"
+                   style="width: 100%; padding: 0.75rem 0.85rem; font-size: 0.95rem; font-weight: 600;">
+            <button type="button" class="password-toggle-btn" id="togglePasswordBtn" title="Lihat/Sembunyikan password">
+              👁️
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.85rem; font-size: 1rem; font-weight: 800; justify-content: center;">
+          ⚡ Masuk Sekarang
+        </button>
+      </form>
+
+      <!-- Default Credential Box -->
+      <div class="default-hint">
+        <div style="font-weight: 800; font-size: 0.85rem; margin-bottom: 0.25rem; display: flex; align-items: center; justify-content: space-between;">
+          <span>💡 Akun Bawaan Sistem</span>
+          <button type="button" onclick="fillDefaultCredentials()" class="btn btn-sm btn-outline" style="font-size: 0.72rem; padding: 0.2rem 0.5rem; background: var(--nb-white);">
+            Isi Otomatis
+          </button>
+        </div>
+        <div>Username: <code>admin</code> | Password: <code>admin123</code></div>
+        <div style="font-size: 0.74rem; color: #555; margin-top: 0.3rem;">
+          *Wajib ganti password pada login pertama kali demi keamanan gudang.
+        </div>
+      </div>
+    </div>
+
+    <!-- Status & Info Footer -->
+    <div class="login-footer-info">
+      <div>🏗️ AL-CIVIL WMS &bull; Server Lokal Aktif (Port 5000)</div>
+      <div style="margin-top: 0.35rem; color: #888;">Optimasi Offline &amp; Android Flash Storage</div>
+    </div>
+  </div>
+
+  <script>
+    // Toggle password visibility
+    const toggleBtn = document.getElementById('togglePasswordBtn');
+    const pwdInput = document.getElementById('passwordInput');
+    if (toggleBtn && pwdInput) {
+      toggleBtn.addEventListener('click', () => {
+        const isPassword = pwdInput.type === 'password';
+        pwdInput.type = isPassword ? 'text' : 'password';
+        toggleBtn.textContent = isPassword ? '🙈' : '👁️';
+      });
+    }
+
+    // Quick fill default admin credentials
+    function fillDefaultCredentials() {
+      const userField = document.getElementById('usernameInput');
+      const pwdField = document.getElementById('passwordInput');
+      if (userField && pwdField) {
+        userField.value = 'admin';
+        pwdField.value = 'admin123';
+        pwdField.focus();
+      }
+    }
+  </script>
+</body>
+</html>

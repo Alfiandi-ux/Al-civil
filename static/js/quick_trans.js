@@ -522,7 +522,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     fetch('/api/transaction/create', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': (typeof getCsrfToken === 'function' ? getCsrfToken() : '')
+      },
       body: JSON.stringify(payload)
     })
       .then(res => res.json())

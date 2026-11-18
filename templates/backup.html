@@ -111,6 +111,7 @@
 
             <!-- Option 3: Create Snapshot on Server -->
             <form method="POST" action="{{ url_for('backup_create') }}" style="margin: 0;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="btn btn-outline backup-snapshot-btn" style="width: 100%; justify-content: center; padding: 0.75rem 1rem;">
                 <span>📸 Buat Snapshot Cadangan di Server Lokal</span>
               </button>
@@ -150,6 +151,7 @@
           </p>
 
           <form method="POST" action="{{ url_for('backup_import') }}" enctype="multipart/form-data" id="importBackupForm">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <!-- File Input Area -->
             <div class="form-group">
               <label class="form-label">Pilih File Backup (*.db / *.json)</label>
@@ -296,8 +298,12 @@
 </div>
 
 <!-- Hidden action forms for local restore and delete -->
-<form id="actionRestoreForm" method="POST" style="display: none;"></form>
-<form id="actionDeleteForm" method="POST" style="display: none;"></form>
+<form id="actionRestoreForm" method="POST" style="display: none;">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
+<form id="actionDeleteForm" method="POST" style="display: none;">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
 
 <!-- Confirmation Modal -->
 <div id="confirmRestoreModal" class="modal-overlay">

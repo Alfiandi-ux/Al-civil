@@ -166,6 +166,7 @@
                 <td style="text-align: center; white-space: nowrap;">
                   {% if m.is_active == 0 %}
                     <form method="POST" action="{{ url_for('restore_material', material_id=m.id) }}" style="display: inline-block;" onsubmit='return confirm("Pulihkan material " + {{ m.name | tojson }} + " kembali ke daftar aktif?");'>
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                       <button type="submit" class="btn btn-outline btn-sm" style="color: #10b981; border-color: #a7f3d0;">
                         ♻️ Pulihkan
                       </button>
@@ -175,6 +176,7 @@
                       ✏️ Edit
                     </button>
                     <form method="POST" action="{{ url_for('delete_material', material_id=m.id) }}" style="display: inline-block;" onsubmit='return confirm("Hapus / arsipkan material " + {{ m.name | tojson }} + "?");'>
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                       <button type="submit" class="btn btn-outline btn-sm" style="color: #ef4444; border-color: #fecaca;" title="Hapus / Arsipkan Material">
                         🗑️
                       </button>
@@ -253,6 +255,7 @@
             <div class="mobile-card-footer">
               {% if m.is_active == 0 %}
                 <form method="POST" action="{{ url_for('restore_material', material_id=m.id) }}" onsubmit='return confirm("Pulihkan material " + {{ m.name | tojson }} + " kembali ke daftar aktif?");' style="flex: 1;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <button type="submit" class="btn btn-outline btn-sm" style="width: 100%; justify-content: center; color: #10b981; border-color: #a7f3d0;">
                     ♻️ Pulihkan Material
                   </button>
@@ -262,6 +265,7 @@
                   ✏️ Edit
                 </button>
                 <form method="POST" action="{{ url_for('delete_material', material_id=m.id) }}" onsubmit='return confirm("Hapus / arsipkan material " + {{ m.name | tojson }} + "?");' style="flex: 0;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <button type="submit" class="btn btn-outline btn-sm" style="color: #ef4444; border-color: #fecaca; padding: 0.5rem 0.75rem;" title="Hapus / Arsipkan Material">
                     🗑️
                   </button>
@@ -299,6 +303,7 @@
       <button type="button" class="modal-close" onclick="closeModal('materialModal')">&times;</button>
     </div>
     <form method="POST" action="{{ url_for('save_material') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="modal-body">
         <input type="hidden" name="id" id="matId">
         

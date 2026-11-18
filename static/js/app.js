@@ -2,6 +2,64 @@
  * AL-CIVIL WMS - Core Application Scripts
  */
 
+// Ambil token CSRF dari meta tag
+function getCsrfToken() {
+  const meta = document.querySelector('meta[name="csrf-token"]');
+  return meta ? meta.getAttribute('content') : '';
+}
+
+// Otomatis sisipkan header X-CSRF-Token pada panggilan fetch (POST, PUT, DELETE, PATCH)
+if (window.fetch) {
+  const _originalFetch = window.fetch;
+  window.fetch = function(resource, init) {
+    init = init || {};
+    const method = (init.method || 'GET').toUpperCase();
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+      const token = getCsrfToken();
+      if (token) {
+        if (!init.headers) {
+          init.headers = {};
+        }
+        if (init.headers instanceof Headers) {
+          if (!init.headers.has('X-CSRF-Token')) {
+            init.headers.set('X-CSRF-Token', token);
+          }
+        } else if (Array.isArray(init.headers)) {
+          if (!init.headers.some(([k]) => k.toLowerCase() === 'x-csrf-token')) {
+            init.headers.push(['X-CSRF-Token', token]);
+          }
+        } else if (typeof init.headers === 'object') {
+          if (!init.headers['X-CSRF-Token']) {
+            init.headers['X-CSRF-Token'] = token;
+          }
+        }
+      }
+    }
+    return _originalFetch.call(this, resource, init);
+  };
+}
+
+// Otomatis pastikan semua form submit ber-method POST membawa hidden input csrf_token
+document.addEventListener('submit', function(e) {
+  const form = e.target;
+  if (!form || form.tagName !== 'FORM') return;
+  const method = (form.getAttribute('method') || 'GET').toUpperCase();
+  if (method === 'POST') {
+    const token = getCsrfToken();
+    if (!token) return;
+    let csrfInput = form.querySelector('input[name="csrf_token"]');
+    if (!csrfInput) {
+      csrfInput = document.createElement('input');
+      csrfInput.type = 'hidden';
+      csrfInput.name = 'csrf_token';
+      csrfInput.value = token;
+      form.appendChild(csrfInput);
+    } else if (!csrfInput.value) {
+      csrfInput.value = token;
+    }
+  }
+}, true);
+
 // Escape teks sebelum dimasukkan ke innerHTML, supaya nama material yang
 // mengandung karakter < > " ' & tidak merusak tampilan (dan aman dari XSS).
 function escapeHtml(value) {
@@ -67,9 +125,3 @@ window.addEventListener('click', (e) => {
 function formatRupiah(num) {
   return 'Rp ' + Number(num || 0).toLocaleString('id-ID');
 }
-
-// Mobile drawer menu toggle
-// BUG-07 FIX: Implementasi dipindahkan ke base.html agar konsisten dengan
-// markup drawer (menuIconEl, body overflow, dll). Fungsi di sini dihapus
-// untuk mencegah konflik overwrite definisi ganda.
-// Lihat: templates/base.html <script> toggleMobileMenu(forceClose)

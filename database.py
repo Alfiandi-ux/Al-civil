@@ -4,10 +4,18 @@ Database Layer & Seed Data
 """
 import sqlite3
 import os
+import json
 from datetime import datetime
+from werkzeug.security import check_password_hash, generate_password_hash
 
 DATA_DIR = os.environ.get('ALCIVIL_DATA_DIR') or os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.environ.get('DB_PATH') or os.path.join(DATA_DIR, 'alcivil.db')
+
+# Kredensial admin awal. Bila ALCIVIL_ADMIN_PASSWORD tidak diisi, aplikasi
+# memakai sandi default dan mewajibkan penggantian saat login pertama.
+DEFAULT_ADMIN_USERNAME = os.environ.get('ALCIVIL_ADMIN_USERNAME', 'admin')
+DEFAULT_ADMIN_PASSWORD = os.environ.get('ALCIVIL_ADMIN_PASSWORD', 'admin123')
+USING_DEFAULT_ADMIN_PASSWORD = not bool(os.environ.get('ALCIVIL_ADMIN_PASSWORD'))
 
 def get_db():
     conn = sqlite3.connect(DB_PATH, timeout=10.0)
@@ -17,6 +25,145 @@ def get_db():
     # BUG-13 FIX: PRAGMA synchronous harus diset per-koneksi (tidak persisten seperti journal_mode)
     conn.execute("PRAGMA synchronous = NORMAL")
     return conn
+
+# ==========================================================
+# USER & AUTHENTICATION HELPERS
+# ==========================================================
+def get_user_by_id(user_id):
+    if not user_id:
+        return None
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT id, username, display_name, role, is_active, must_change_password, "
+            "last_login_at, created_at FROM users WHERE id = ?",
+            (user_id,)
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+def get_user_by_username(username):
+    conn = get_db()
+    try:
+        row = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+def authenticate(username, password):
+    """Kembalikan data user bila username + password benar dan akun aktif."""
+    conn = get_db()
+    try:
+        row = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+        if not row:
+            return None
+        if not row['is_active']:
+            return None
+        if not check_password_hash(row['password_hash'], password):
+            return None
+        return dict(row)
+    finally:
+        conn.close()
+
+def touch_last_login(user_id):
+    conn = get_db()
+    try:
+        conn.execute(
+            "UPDATE users SET last_login_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP "
+            "WHERE id = ?",
+            (user_id,)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+def list_users():
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            "SELECT id, username, display_name, role, is_active, must_change_password, "
+            "last_login_at, created_at FROM users ORDER BY role ASC, username ASC"
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+def create_user(username, password, role='operator', display_name='', must_change_password=0):
+    conn = get_db()
+    try:
+        conn.execute(
+            "INSERT INTO users (username, display_name, password_hash, role, is_active, "
+            "must_change_password) VALUES (?, ?, ?, ?, 1, ?)",
+            (username, display_name or username, generate_password_hash(password),
+             role, 1 if must_change_password else 0)
+        )
+        conn.commit()
+        return True, "Akun berhasil dibuat."
+    except sqlite3.IntegrityError:
+        conn.rollback()
+        return False, "Username tersebut sudah dipakai."
+    except Exception as e:
+        conn.rollback()
+        return False, str(e)
+    finally:
+        conn.close()
+
+def set_user_password(user_id, password, must_change_password=0):
+    conn = get_db()
+    try:
+        cur = conn.execute(
+            "UPDATE users SET password_hash = ?, must_change_password = ?, "
+            "updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (generate_password_hash(password), 1 if must_change_password else 0, user_id)
+        )
+        if cur.rowcount == 0:
+            conn.rollback()
+            return False, "Akun tidak ditemukan."
+        conn.commit()
+        return True, "Password berhasil diperbarui."
+    except Exception as e:
+        conn.rollback()
+        return False, str(e)
+    finally:
+        conn.close()
+
+def set_user_active(user_id, active):
+    """Aktif/nonaktifkan akun. Admin terakhir tidak boleh dinonaktifkan."""
+    conn = get_db()
+    try:
+        row = conn.execute("SELECT role, is_active FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not row:
+            conn.rollback()
+            return False, "Akun tidak ditemukan."
+
+        if not active and row['role'] == 'admin':
+            admins = conn.execute(
+                "SELECT COUNT(*) FROM users WHERE role = 'admin' AND is_active = 1 AND id != ?",
+                (user_id,)
+            ).fetchone()[0]
+            if admins == 0:
+                conn.rollback()
+                return False, "Tidak dapat menonaktifkan admin terakhir yang aktif."
+
+        conn.execute(
+            "UPDATE users SET is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (1 if active else 0, user_id)
+        )
+        conn.commit()
+        return True, "Status akun diperbarui."
+    except Exception as e:
+        conn.rollback()
+        return False, str(e)
+    finally:
+        conn.close()
+
+def count_active_users():
+    conn = get_db()
+    try:
+        return conn.execute("SELECT COUNT(*) FROM users WHERE is_active = 1").fetchone()[0]
+    finally:
+        conn.close()
 
 def migrate_schema(cursor):
     """Tambahkan kolom baru yang belum ada pada database versi lama.
@@ -143,6 +290,31 @@ def init_db():
     )
     ''')
 
+    # Users & Authentication (login, role admin/operator)
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL COLLATE NOCASE,
+        display_name TEXT,
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'operator',
+        is_active INTEGER NOT NULL DEFAULT 1,
+        must_change_password INTEGER NOT NULL DEFAULT 0,
+        last_login_at DATETIME,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+    ''')
+
+    # Index untuk query laporan yang sering dipakai (dashboard, arsip, opname).
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_materials_active ON materials(is_active, name)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_materials_category ON materials(category)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_transactions_created ON transactions(created_at DESC)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type, created_at DESC)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_tx_items_transaction ON transaction_items(transaction_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_tx_items_material ON transaction_items(material_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_adjustments_material ON stock_adjustments(material_id, created_at DESC)")
+
     # Migrasi skema untuk database lama: kolom soft-delete material.
     # SQLite tidak bisa ALTER CONSTRAINT, tapi bisa ALTER TABLE ADD COLUMN.
     migrate_schema(cursor)
@@ -151,6 +323,20 @@ def init_db():
     cursor.execute('SELECT COUNT(*) FROM materials')
     if cursor.fetchone()[0] == 0:
         seed_initial_data(cursor)
+
+    # Pastikan selalu ada akun admin agar aplikasi bisa diakses pertama kali.
+    cursor.execute('SELECT COUNT(*) FROM users')
+    if cursor.fetchone()[0] == 0:
+        cursor.execute('''
+            INSERT INTO users (username, display_name, password_hash, role,
+                               is_active, must_change_password)
+            VALUES (?, ?, ?, 'admin', 1, ?)
+        ''', (
+            DEFAULT_ADMIN_USERNAME,
+            'Administrator Gudang',
+            generate_password_hash(DEFAULT_ADMIN_PASSWORD),
+            1 if USING_DEFAULT_ADMIN_PASSWORD else 0
+        ))
 
     conn.commit()
     conn.close()
@@ -385,7 +571,7 @@ def get_database_stats():
 def backup_to_sqlite(dest_path=None):
     """Membuat salinan database SQLite online atomik yang konsisten."""
     if not dest_path:
-        filename = f"alcivil_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+        filename = f"alcivil_backup_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.db"
         dest_path = os.path.join(BACKUP_DIR, filename)
     else:
         filename = os.path.basename(dest_path)
@@ -430,7 +616,12 @@ def backup_to_json():
     return payload
 
 def validate_sqlite_backup(file_path):
-    """Validasi file SQLite: cek integritas dan tabel-tabel utama."""
+    """Validasi file SQLite: integritas, tabel wajib, dan tidak ada trigger/view.
+
+    Trigger/view ditolak karena file backup AL-CIVIL tidak pernah memakainya,
+    sementara file berbahaya bisa menyisipkan trigger yang ikut tereksekusi
+    saat aplikasi menulis ke database hasil restore.
+    """
     if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
         return False, "File database tidak ditemukan atau kosong."
 
@@ -441,20 +632,47 @@ def validate_sqlite_backup(file_path):
         # Cek integritas SQLite
         cursor.execute("PRAGMA quick_check")
         check_res = cursor.fetchone()
-        if not check_res or check_res[0].lower() != 'ok':
+        if not check_res or str(check_res[0]).lower() != 'ok':
             conn.close()
             return False, f"Pemeriksaan integritas SQLite gagal: {check_res[0] if check_res else 'Unknown'}"
+
+        # Tolak trigger/view asing (indikasi file tidak sah / berbahaya)
+        cursor.execute("SELECT name, type FROM sqlite_master WHERE type IN ('trigger', 'view')")
+        unsafe = cursor.fetchall()
+        if unsafe:
+            conn.close()
+            names = ', '.join(f"{r[1]}: {r[0]}" for r in unsafe[:5])
+            return False, f"File database mengandung objek yang tidak diizinkan ({names})."
 
         # Cek tabel wajib
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
         tables = [row[0] for row in cursor.fetchall()]
-        conn.close()
-
         required = ['materials', 'projects', 'suppliers', 'transactions', 'transaction_items']
         missing = [t for t in required if t not in tables]
         if missing:
+            conn.close()
             return False, f"File database tidak valid untuk AL-CIVIL (tabel hilang: {', '.join(missing)})."
 
+        # Cek kolom kunci agar restore tidak menghasilkan skema setengah jadi.
+        required_columns = {
+            'materials': ['id', 'sku', 'name', 'category', 'unit', 'stock'],
+            'transactions': ['id', 'transaction_number', 'type'],
+            'transaction_items': ['transaction_id', 'material_id', 'qty'],
+            'projects': ['id', 'code', 'name'],
+            'suppliers': ['id', 'code', 'name'],
+        }
+        for table, cols in required_columns.items():
+            cursor.execute(f"PRAGMA table_info({table})")
+            existing = {row[1] for row in cursor.fetchall()}
+            missing_cols = [c for c in cols if c not in existing]
+            if missing_cols:
+                conn.close()
+                return False, (
+                    f"Struktur tabel '{table}' tidak cocok "
+                    f"(kolom hilang: {', '.join(missing_cols)})."
+                )
+
+        conn.close()
         return True, "Valid"
     except Exception as e:
         return False, f"File bukan database SQLite yang valid ({str(e)})."
@@ -493,17 +711,78 @@ def restore_from_sqlite(source_path):
     except Exception as e:
         return False, f"Gagal memulihkan database: {str(e)}"
 
+TABLE_NATURAL_KEYS = {
+    'projects': 'code',
+    'suppliers': 'code',
+    'materials': 'sku',
+    'transactions': 'transaction_number',
+}
+
+def _table_columns(conn, table):
+    """Daftar kolom sah sebuah tabel (whitelist, mencegah injeksi identifier)."""
+    return {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+
+def _filter_row(row, allowed, table):
+    if not isinstance(row, dict):
+        raise ValueError(f"Baris pada tabel '{table}' tidak valid.")
+    data = {k: v for k, v in row.items() if k in allowed}
+    if not data:
+        raise ValueError(f"Baris pada tabel '{table}' tidak memiliki kolom yang dikenali.")
+    for k, v in data.items():
+        if isinstance(v, (dict, list)):
+            raise ValueError(f"Nilai kolom '{table}.{k}' tidak valid (harus teks/angka).")
+    return data
+
+def _insert_row(cursor, table, row, allowed, keep_id=True):
+    data = _filter_row(row, allowed, table)
+    if not keep_id:
+        data.pop('id', None)
+    cols = ", ".join(data.keys())
+    placeholders = ", ".join(["?"] * len(data))
+    cursor.execute(
+        f"INSERT INTO {table} ({cols}) VALUES ({placeholders})",
+        list(data.values())
+    )
+    return cursor.lastrowid
+
+def _update_row(cursor, table, row, allowed, key_col):
+    data = _filter_row(row, allowed, table)
+    key_value = data.get(key_col)
+    updates = {k: v for k, v in data.items() if k not in ('id', key_col)}
+    if not updates:
+        return
+    cols = ", ".join(f"{k} = ?" for k in updates.keys())
+    cursor.execute(
+        f"UPDATE {table} SET {cols} WHERE {key_col} = ?",
+        list(updates.values()) + [key_value]
+    )
+
 def restore_from_json(payload, mode='replace'):
-    """Memulihkan data dari dictionary/JSON backup."""
+    """Memulihkan data dari dictionary/JSON backup.
+
+    Mode 'replace' mengosongkan tabel lalu memasang ulang data beserta ID asli.
+    Mode 'merge' mencocokkan baris berdasarkan kunci alami (code/SKU/nomor
+    dokumen) dan MEMPERTAHANKAN ID yang sudah ada, sehingga relasi transaksi
+    tidak menjadi yatim. Item transaksi hanya dimasukkan untuk transaksi baru
+    agar tidak terjadi duplikasi saat impor diulang.
+    """
+    if mode not in ('replace', 'merge'):
+        return False, "Mode impor tidak valid."
     if not isinstance(payload, dict) or 'data' not in payload:
         return False, "Format file JSON backup tidak valid (tidak ada root 'data')."
 
     data = payload.get('data', {})
+    if not isinstance(data, dict):
+        return False, "Struktur 'data' pada file JSON tidak valid."
     for req in ['materials', 'projects', 'suppliers']:
         if req not in data:
             return False, f"Tabel '{req}' tidak ditemukan dalam data JSON."
+    for table in ['materials', 'projects', 'suppliers', 'transactions',
+                  'transaction_items', 'stock_adjustments']:
+        if table in data and not isinstance(data[table], list):
+            return False, f"Tabel '{table}' pada file JSON harus berupa daftar."
 
-    safety_name = f"pre_restore_json_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+    safety_name = f"pre_restore_json_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.db"
     safety_path = os.path.join(BACKUP_DIR, safety_name)
     try:
         backup_to_sqlite(safety_path)
@@ -515,6 +794,11 @@ def restore_from_json(payload, mode='replace'):
 
     try:
         cursor.execute("PRAGMA foreign_keys = OFF")
+        allowed = {
+            table: _table_columns(conn, table)
+            for table in ['projects', 'suppliers', 'materials', 'transactions',
+                          'transaction_items', 'stock_adjustments']
+        }
 
         if mode == 'replace':
             cursor.execute("DELETE FROM transaction_items")
@@ -523,82 +807,149 @@ def restore_from_json(payload, mode='replace'):
             cursor.execute("DELETE FROM materials")
             cursor.execute("DELETE FROM projects")
             cursor.execute("DELETE FROM suppliers")
-            cursor.execute("DELETE FROM sqlite_sequence WHERE name IN ('materials', 'projects', 'suppliers', 'transactions', 'transaction_items', 'stock_adjustments')")
+            cursor.execute(
+                "DELETE FROM sqlite_sequence WHERE name IN "
+                "('materials', 'projects', 'suppliers', 'transactions', "
+                "'transaction_items', 'stock_adjustments')"
+            )
 
-        # 1. Projects
-        for p in data.get('projects', []):
-            keys = [k for k in p.keys() if k != 'id']
-            cols = ", ".join(keys)
-            placeholders = ", ".join(["?"] * len(keys))
-            vals = [p[k] for k in keys]
-            if mode == 'replace' and 'id' in p:
-                cursor.execute(f"INSERT OR REPLACE INTO projects (id, {cols}) VALUES (?, {placeholders})", [p['id']] + vals)
+            for table in ['projects', 'suppliers', 'materials',
+                          'transactions', 'transaction_items', 'stock_adjustments']:
+                for row in data.get(table, []):
+                    _insert_row(cursor, table, row, allowed[table], keep_id=True)
+
+            # Hanya data yang konsisten yang boleh masuk.
+            fk_errors = cursor.execute("PRAGMA foreign_key_check").fetchall()
+            if fk_errors:
+                raise ValueError(
+                    f"Data backup tidak konsisten: {len(fk_errors)} referensi yatim."
+                )
+            conn.commit()
+            return True, "Data berhasil diganti penuh dari file JSON."
+
+        # ---------- MERGE ----------
+        id_maps = {'projects': {}, 'suppliers': {}, 'materials': {}, 'transactions': {}}
+        stats = {'projects': 0, 'suppliers': 0, 'materials': 0, 'transactions': 0,
+                 'transaction_items': 0, 'stock_adjustments': 0}
+
+        for table in ['projects', 'suppliers', 'materials']:
+            key_col = TABLE_NATURAL_KEYS[table]
+            for row in data.get(table, []):
+                clean = _filter_row(row, allowed[table], table)
+                key_value = clean.get(key_col)
+                if not key_value:
+                    raise ValueError(f"Baris tabel '{table}' tidak memiliki '{key_col}'.")
+                existing = cursor.execute(
+                    f"SELECT id FROM {table} WHERE {key_col} = ?", (key_value,)
+                ).fetchone()
+                if existing:
+                    _update_row(cursor, table, clean, allowed[table], key_col)
+                    new_id = existing['id']
+                elif table == 'materials':
+                    try:
+                        new_id = _insert_row(cursor, table, clean, allowed[table], keep_id=False)
+                    except sqlite3.IntegrityError:
+                        # Barcode bentrok dengan material lain -> simpan tanpa barcode.
+                        clean['barcode'] = None
+                        new_id = _insert_row(cursor, table, clean, allowed[table], keep_id=False)
+                else:
+                    new_id = _insert_row(cursor, table, clean, allowed[table], keep_id=False)
+                stats[table] += 1
+                if clean.get('id') is not None:
+                    id_maps[table][clean['id']] = new_id
+
+        # Transaksi: pertahankan nomor dokumen, petakan ID lama -> ID sebenarnya.
+        new_transaction_old_ids = set()
+        for row in data.get('transactions', []):
+            clean = _filter_row(row, allowed['transactions'], 'transactions')
+            tx_num = clean.get('transaction_number')
+            if not tx_num:
+                raise ValueError("Baris transaksi tidak memiliki transaction_number.")
+            existing = cursor.execute(
+                "SELECT id FROM transactions WHERE transaction_number = ?", (tx_num,)
+            ).fetchone()
+            if existing:
+                new_id = existing['id']
             else:
-                cursor.execute(f"INSERT OR REPLACE INTO projects ({cols}) VALUES ({placeholders})", vals)
+                new_id = _insert_row(cursor, 'transactions', clean, allowed['transactions'],
+                                     keep_id=False)
+                if clean.get('id') is not None:
+                    new_transaction_old_ids.add(clean['id'])
+            stats['transactions'] += 1
+            if clean.get('id') is not None:
+                id_maps['transactions'][clean['id']] = new_id
 
-        # 2. Suppliers
-        for s in data.get('suppliers', []):
-            keys = [k for k in s.keys() if k != 'id']
-            cols = ", ".join(keys)
-            placeholders = ", ".join(["?"] * len(keys))
-            vals = [s[k] for k in keys]
-            if mode == 'replace' and 'id' in s:
-                cursor.execute(f"INSERT OR REPLACE INTO suppliers (id, {cols}) VALUES (?, {placeholders})", [s['id']] + vals)
-            else:
-                cursor.execute(f"INSERT OR REPLACE INTO suppliers ({cols}) VALUES ({placeholders})", vals)
+        # Item transaksi: hanya untuk transaksi yang benar-benar baru.
+        seen_items = set()
+        for row in data.get('transaction_items', []):
+            clean = _filter_row(row, allowed['transaction_items'], 'transaction_items')
+            old_tx_id = clean.get('transaction_id')
+            old_mat_id = clean.get('material_id')
+            if old_tx_id not in new_transaction_old_ids:
+                continue
+            new_tx_id = id_maps['transactions'].get(old_tx_id)
+            new_mat_id = id_maps['materials'].get(old_mat_id, old_mat_id)
+            if not new_tx_id or not new_mat_id:
+                continue
+            clean['transaction_id'] = new_tx_id
+            clean['material_id'] = new_mat_id
+            if 'id' in clean:
+                clean = {k: v for k, v in clean.items() if k != 'id'}
+            fingerprint = (
+                new_tx_id, new_mat_id, clean.get('qty'),
+                clean.get('unit_price'), clean.get('notes')
+            )
+            if fingerprint in seen_items:
+                continue
+            seen_items.add(fingerprint)
+            _insert_row(cursor, 'transaction_items', clean, allowed['transaction_items'],
+                        keep_id=False)
+            stats['transaction_items'] += 1
 
-        # 3. Materials
-        for m in data.get('materials', []):
-            keys = [k for k in m.keys() if k != 'id']
-            cols = ", ".join(keys)
-            placeholders = ", ".join(["?"] * len(keys))
-            vals = [m[k] for k in keys]
-            if mode == 'replace' and 'id' in m:
-                cursor.execute(f"INSERT OR REPLACE INTO materials (id, {cols}) VALUES (?, {placeholders})", [m['id']] + vals)
-            else:
-                cursor.execute(f"INSERT OR REPLACE INTO materials ({cols}) VALUES ({placeholders})", vals)
+        # Penyesuaian stok: hindari duplikasi baris yang identik.
+        for row in data.get('stock_adjustments', []):
+            clean = _filter_row(row, allowed['stock_adjustments'], 'stock_adjustments')
+            clean['material_id'] = id_maps['materials'].get(
+                clean.get('material_id'), clean.get('material_id')
+            )
+            if not clean.get('material_id'):
+                continue
+            exists = cursor.execute(
+                "SELECT 1 FROM stock_adjustments WHERE material_id = ? AND old_stock = ? "
+                "AND new_stock = ? AND COALESCE(reason, '') = COALESCE(?, '') "
+                "AND COALESCE(created_at, '') = COALESCE(?, '')",
+                (clean.get('material_id'), clean.get('old_stock'), clean.get('new_stock'),
+                 clean.get('reason'), clean.get('created_at'))
+            ).fetchone()
+            if exists:
+                continue
+            clean.pop('id', None)
+            _insert_row(cursor, 'stock_adjustments', clean, allowed['stock_adjustments'],
+                        keep_id=False)
+            stats['stock_adjustments'] += 1
 
-        # 4. Transactions
-        for t in data.get('transactions', []):
-            keys = [k for k in t.keys() if k != 'id']
-            cols = ", ".join(keys)
-            placeholders = ", ".join(["?"] * len(keys))
-            vals = [t[k] for k in keys]
-            if mode == 'replace' and 'id' in t:
-                cursor.execute(f"INSERT OR REPLACE INTO transactions (id, {cols}) VALUES (?, {placeholders})", [t['id']] + vals)
-            else:
-                cursor.execute(f"INSERT OR IGNORE INTO transactions ({cols}) VALUES ({placeholders})", vals)
-
-        # 5. Transaction Items
-        for item in data.get('transaction_items', []):
-            keys = [k for k in item.keys() if k != 'id']
-            cols = ", ".join(keys)
-            placeholders = ", ".join(["?"] * len(keys))
-            vals = [item[k] for k in keys]
-            if mode == 'replace' and 'id' in item:
-                cursor.execute(f"INSERT OR REPLACE INTO transaction_items (id, {cols}) VALUES (?, {placeholders})", [item['id']] + vals)
-            else:
-                cursor.execute(f"INSERT INTO transaction_items ({cols}) VALUES ({placeholders})", vals)
-
-        # 6. Stock Adjustments
-        for adj in data.get('stock_adjustments', []):
-            keys = [k for k in adj.keys() if k != 'id']
-            cols = ", ".join(keys)
-            placeholders = ", ".join(["?"] * len(keys))
-            vals = [adj[k] for k in keys]
-            if mode == 'replace' and 'id' in adj:
-                cursor.execute(f"INSERT OR REPLACE INTO stock_adjustments (id, {cols}) VALUES (?, {placeholders})", [adj['id']] + vals)
-            else:
-                cursor.execute(f"INSERT INTO stock_adjustments ({cols}) VALUES ({placeholders})", vals)
-
-        cursor.execute("PRAGMA foreign_keys = ON")
+        fk_errors = cursor.execute("PRAGMA foreign_key_check").fetchall()
+        if fk_errors:
+            raise ValueError(
+                f"Data gabungan tidak konsisten: {len(fk_errors)} referensi yatim."
+            )
         conn.commit()
-        conn.close()
-        return True, "Data berhasil diimpor dari file JSON."
+        return True, (
+            f"Data berhasil digabungkan: {stats['materials']} material, "
+            f"{stats['transactions']} transaksi, "
+            f"{stats['transaction_items']} item baru."
+        )
     except Exception as e:
         conn.rollback()
-        conn.close()
         return False, f"Gagal mengimpor data JSON: {str(e)}"
+    finally:
+        try:
+            # PRAGMA foreign_keys tidak berlaku di dalam transaksi, jadi
+            # dijalankan setelah commit/rollback pada koneksi yang sama.
+            conn.execute("PRAGMA foreign_keys = ON")
+        except Exception:
+            pass
+        conn.close()
 
 def list_local_backups():
     """Mendapatkan daftar file backup yang tersimpan di direktori server."""
@@ -632,8 +983,11 @@ def delete_local_backup(filename):
     safe_name = os.path.basename(filename)
     if not (safe_name.endswith('.db') or safe_name.endswith('.json')):
         return False, "Tipe file tidak valid."
-    fpath = os.path.join(BACKUP_DIR, safe_name)
-    if os.path.exists(fpath):
+    fpath = os.path.realpath(os.path.join(BACKUP_DIR, safe_name))
+    backup_root = os.path.realpath(BACKUP_DIR)
+    if os.path.dirname(fpath) != backup_root:
+        return False, "Lokasi file tidak valid."
+    if os.path.isfile(fpath):
         os.remove(fpath)
         return True, "File backup berhasil dihapus."
     return False, "File backup tidak ditemukan."

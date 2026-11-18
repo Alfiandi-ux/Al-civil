@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
   <meta name="theme-color" content="#ffd93d">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -18,6 +19,64 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=10) }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/premium.css', v=6) }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/brutalist.css', v=1) }}">
+  <style>
+    .nav-user-box {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--nb-paper-2, #fffdf6);
+      border: 2px solid var(--nb-ink, #000);
+      box-shadow: 2px 2px 0 var(--nb-ink, #000);
+      padding: 0.25rem 0.6rem;
+      border-radius: 4px;
+    }
+    .nav-user-avatar {
+      width: 26px;
+      height: 26px;
+      border-radius: 3px;
+      background: var(--nb-yellow, #ffd93d);
+      border: 1.5px solid var(--nb-ink, #000);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.72rem;
+      font-weight: 800;
+      color: var(--nb-ink, #000);
+    }
+    .nav-user-name {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: var(--nb-ink, #000);
+      max-width: 120px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .nav-btn-icon {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 0.88rem;
+      padding: 0.2rem 0.35rem;
+      border-radius: 3px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--nb-ink, #000);
+      text-decoration: none;
+    }
+    .nav-btn-icon:hover {
+      background: #e2e8f0;
+    }
+    .mobile-drawer-user {
+      background: var(--nb-yellow-soft, #fff3b8);
+      border: 2px solid var(--nb-ink, #000);
+      box-shadow: 3px 3px 0 var(--nb-ink, #000);
+      padding: 0.85rem;
+      margin-bottom: 1rem;
+      border-radius: 4px;
+    }
+  </style>
   {% block extra_head %}{% endblock %}
 </head>
 <body>
@@ -41,6 +100,7 @@
         </div>
       </a>
 
+      {% if current_user %}
       <!-- Desktop Navigation Links -->
       <nav class="desktop-nav" aria-label="Navigasi utama">
         <ul class="nav-links">
@@ -78,15 +138,36 @@
               <span aria-hidden="true">◐</span> Opname
             </a>
           </li>
+          {% if is_admin %}
           <li>
             <a href="{{ url_for('backup_view') }}" class="nav-link {% if request.endpoint == 'backup_view' %}active{% endif %}" title="Backup &amp; Migrasi Data">
               <span aria-hidden="true">▣</span> Backup
             </a>
           </li>
+          {% endif %}
         </ul>
       </nav>
 
-      <span class="nav-status"><span class="live-dot"></span> Lokal</span>
+      <!-- Desktop User Menu Box -->
+      <div class="nav-user-box desktop-only">
+        <a href="{{ url_for('account') }}" title="Profil &amp; Ganti Password" style="display: flex; align-items: center; gap: 0.4rem; text-decoration: none; color: inherit;">
+          <div class="nav-user-avatar">
+            {{ (current_user.display_name or current_user.username)[:2]|upper }}
+          </div>
+          <span class="nav-user-name">{{ current_user.display_name or current_user.username }}</span>
+        </a>
+        {% if is_admin %}
+          <a href="{{ url_for('users_view') }}" class="nav-btn-icon" title="Kelola Pengguna">
+            👥
+          </a>
+        {% endif %}
+        <form method="POST" action="{{ url_for('logout') }}" style="margin: 0; display: inline;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="nav-btn-icon" title="Keluar / Logout" onclick="return confirm('Keluar dari sistem?');">
+            🚪
+          </button>
+        </form>
+      </div>
 
       <!-- Mobile Top Quick Action -->
       <div class="mobile-top-action">
@@ -94,6 +175,13 @@
           ⚡ Transaksi
         </a>
       </div>
+      {% else %}
+      <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <a href="{{ url_for('login') }}" class="btn btn-primary btn-sm">
+          🔐 Masuk
+        </a>
+      </div>
+      {% endif %}
     </div>
   </header>
 
@@ -132,6 +220,7 @@
     {% block content %}{% endblock %}
   </main>
 
+  {% if current_user %}
   <!-- ===== MOBILE BOTTOM NAVIGATION ===== -->
   <nav class="mobile-bottom-nav no-print" id="mobileBottomNav">
     <a href="{{ url_for('dashboard') }}" class="mobile-nav-item {% if request.endpoint == 'dashboard' %}active{% endif %}">
@@ -166,15 +255,54 @@
   <div class="mobile-drawer no-print" id="mobileDrawer">
     <div class="mobile-drawer-header">
       <div style="display: flex; align-items: center; gap: 0.75rem;">
-        <div class="brand-icon" style="width: 36px; height: 36px; font-size: 0.9rem; border-radius: 8px;">AL</div>
+        <div class="brand-icon" style="width: 36px; height: 36px; font-size: 0.9rem; border-radius: 4px;">AL</div>
         <div>
-          <div style="font-weight: 800; font-size: 0.95rem; color: var(--text-main);">Menu Lanjutan</div>
+          <div style="font-weight: 800; font-size: 0.95rem; color: var(--text-main);">Menu Navigasi</div>
           <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 600;">AL-CIVIL WMS</div>
         </div>
       </div>
       <button class="modal-close" onclick="toggleMobileMenu(false)">×</button>
     </div>
     <div class="mobile-drawer-body">
+
+      <!-- User Profile Header in Drawer -->
+      <div class="mobile-drawer-user">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+          <div style="display: flex; align-items: center; gap: 0.6rem;">
+            <div class="nav-user-avatar" style="width: 32px; height: 32px; font-size: 0.85rem;">
+              {{ (current_user.display_name or current_user.username)[:2]|upper }}
+            </div>
+            <div>
+              <div style="font-weight: 800; font-size: 0.88rem; color: var(--nb-ink);">
+                {{ current_user.display_name or current_user.username }}
+              </div>
+              <div style="font-size: 0.72rem; color: #555; font-family: var(--font-mono);">
+                @{{ current_user.username }}
+              </div>
+            </div>
+          </div>
+          <span class="badge {% if is_admin %}badge-warning{% else %}badge-primary{% endif %}" style="font-size: 0.68rem; font-weight: 800;">
+            {{ 'ADMIN' if is_admin else 'OPERATOR' }}
+          </span>
+        </div>
+        <div style="display: flex; gap: 0.4rem; margin-top: 0.6rem;">
+          <a href="{{ url_for('account') }}" class="btn btn-outline btn-sm" style="flex: 1; justify-content: center; font-size: 0.75rem; background: var(--nb-white);">
+            👤 Akun Saya
+          </a>
+          {% if is_admin %}
+          <a href="{{ url_for('users_view') }}" class="btn btn-outline btn-sm" style="flex: 1; justify-content: center; font-size: 0.75rem; background: var(--nb-white);">
+            👥 Pengguna
+          </a>
+          {% endif %}
+          <form method="POST" action="{{ url_for('logout') }}" style="margin: 0;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-danger btn-sm" style="font-size: 0.75rem;" onclick="return confirm('Keluar dari sistem?');">
+              🚪 Keluar
+            </button>
+          </form>
+        </div>
+      </div>
+
       <a href="{{ url_for('projects') }}" class="mobile-drawer-link {% if request.endpoint == 'projects' %}active{% endif %}">
         <span class="drawer-icon">🏗️</span>
         <div>
@@ -189,6 +317,7 @@
           <div class="drawer-desc">Penyelarasan stok &amp; audit selisih gudang</div>
         </div>
       </a>
+      {% if is_admin %}
       <a href="{{ url_for('backup_view') }}" class="mobile-drawer-link {% if request.endpoint == 'backup_view' %}active{% endif %}">
         <span class="drawer-icon">💾</span>
         <div>
@@ -196,6 +325,7 @@
           <div class="drawer-desc">Unduh / impor database saat pindah HP &amp; Termux</div>
         </div>
       </a>
+      {% endif %}
       <a href="{{ url_for('export_materials') }}" class="mobile-drawer-link">
         <span class="drawer-icon">📥</span>
         <div>
@@ -221,6 +351,7 @@
       </div>
     </div>
   </div>
+  {% endif %}
 
   <!-- ===== FOOTER ===== -->
   <footer class="footer no-print">
@@ -252,7 +383,7 @@
   <!-- ===== TOAST NOTIFICATION CONTAINER ===== -->
   <div id="toastContainer" class="toast-container"></div>
 
-  <script src="{{ url_for('static', filename='js/app.js', v=8) }}"></script>
+  <script src="{{ url_for('static', filename='js/app.js', v=9) }}"></script>
   <script>
     // Register PWA Service Worker
     if ('serviceWorker' in navigator) {
@@ -268,15 +399,16 @@
       const drawer = document.getElementById('mobileDrawer');
       const overlay = document.getElementById('mobileDrawerOverlay');
       const menuIcon = document.getElementById('menuIconEl');
+      if (!drawer) return;
       const isOpen = drawer.classList.contains('open');
 
       if (forceClose === false || isOpen) {
         drawer.classList.remove('open');
-        overlay.classList.remove('open');
+        if (overlay) overlay.classList.remove('open');
         if (menuIcon) menuIcon.textContent = '☰';
       } else {
         drawer.classList.add('open');
-        overlay.classList.add('open');
+        if (overlay) overlay.classList.add('open');
         if (menuIcon) menuIcon.textContent = '✕';
       }
     }

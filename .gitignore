@@ -22,6 +22,7 @@ env/
 # Environment variables & local secrets
 .env
 .env.local
+.secret_key
 
 # Android Build Outputs & Gradle Caches
 .gradle/

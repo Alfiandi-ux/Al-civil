@@ -32,6 +32,7 @@
         </h3>
       </div>
       <form method="POST" action="{{ url_for('save_stock_opname') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="card-body">
           
           <div class="form-group">

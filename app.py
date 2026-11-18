@@ -4,16 +4,21 @@ Server Lokal - Modul Utama Aplikasi Flask
 """
 import os
 import csv
+import hmac
 import io
 import json
 import math
 import secrets
 import sqlite3
 import threading
-from datetime import datetime, timezone
+import time
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from datetime import datetime, timedelta, timezone
+from urllib.parse import urlparse
 from werkzeug.utils import secure_filename
 from flask import (
-    Flask, render_template, request, jsonify, redirect, url_for, flash, Response, send_from_directory, send_file
+    Flask, render_template, request, jsonify, redirect, url_for, flash, Response,
+    send_from_directory, send_file, session, g, abort
 )
 import database
 
@@ -25,20 +30,162 @@ except ImportError:
     pass
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def _load_secret_key():
+    """Ambil SECRET_KEY dari env, atau simpan kunci acak di file lokal.
+
+    Kunci yang persisten membuat sesi login tidak terputus setiap server
+    di-restart, tanpa perlu menulis rahasia ke repositori Git.
+    """
+    env_key = os.environ.get('SECRET_KEY')
+    if env_key:
+        return env_key
+    key_path = os.path.join(BASE_DIR, '.secret_key')
+    try:
+        if os.path.exists(key_path):
+            with open(key_path, 'r', encoding='utf-8') as f:
+                key = f.read().strip()
+            if key:
+                return key
+        key = secrets.token_hex(32)
+        with open(key_path, 'w', encoding='utf-8') as f:
+            f.write(key)
+        try:
+            os.chmod(key_path, 0o600)
+        except Exception:
+            pass
+        return key
+    except Exception:
+        return secrets.token_hex(32)
+
 app = Flask(
     __name__,
     template_folder=os.path.join(BASE_DIR, 'templates'),
     static_folder=os.path.join(BASE_DIR, 'static')
 )
-# SECRET_KEY wajib diisi lewat environment saat deploy publik.
-# Fallback acak hanya untuk pemakaian lokal, sehingga tidak ada kunci rahasia
-# yang ikut ter-commit ke repositori.
-app.secret_key = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
+app.secret_key = _load_secret_key()
+app.config.update(
+    MAX_CONTENT_LENGTH=int(os.environ.get('MAX_UPLOAD_MB', '64')) * 1024 * 1024,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+    SESSION_COOKIE_SECURE=os.environ.get('SECURE_COOKIES', 'false').lower() in ('1', 'true'),
+    PERMANENT_SESSION_LIFETIME=timedelta(
+        hours=int(os.environ.get('SESSION_HOURS', '12'))
+    ),
+    CSRF_ENABLED=os.environ.get('CSRF_ENABLED', 'true').lower() not in ('0', 'false', 'no'),
+)
 
 # SQLite hanya mengizinkan satu penulis pada satu waktu. Lock ini membuat
 # pembuatan nomor dokumen + insert transaksi berjalan atomik di dalam proses,
 # sehingga dua request bersamaan tidak menghasilkan nomor dokumen yang sama.
 tx_write_lock = threading.Lock()
+
+# Endpoint yang hanya boleh diakses administrator.
+ADMIN_ENDPOINTS = {
+    'backup_view', 'backup_create', 'backup_download_db', 'backup_download_json',
+    'backup_download_file', 'backup_import', 'backup_restore_local', 'backup_delete_local',
+    'users_view', 'user_create', 'user_reset_password', 'user_toggle_active',
+}
+
+# Pembatasan percobaan login (in-memory, cukup untuk server lokal).
+LOGIN_FAILURES = {}
+LOGIN_LOCK = threading.Lock()
+LOGIN_WINDOW_SECONDS = 300
+LOGIN_MAX_ATTEMPTS = 8
+
+def _client_ip():
+    return request.headers.get('X-Forwarded-For', request.remote_addr or 'local').split(',')[0].strip()
+
+def _login_blocked(ip):
+    now = time.time()
+    with LOGIN_LOCK:
+        attempts = [t for t in LOGIN_FAILURES.get(ip, []) if now - t < LOGIN_WINDOW_SECONDS]
+        LOGIN_FAILURES[ip] = attempts
+        return len(attempts) >= LOGIN_MAX_ATTEMPTS
+
+def _record_login_failure(ip):
+    with LOGIN_LOCK:
+        LOGIN_FAILURES.setdefault(ip, []).append(time.time())
+
+def _clear_login_failures(ip):
+    with LOGIN_LOCK:
+        LOGIN_FAILURES.pop(ip, None)
+
+def get_csrf_token():
+    """Ambil/buat token CSRF untuk sesi saat ini."""
+    if 'csrf_token' not in session:
+        session['csrf_token'] = secrets.token_urlsafe(32)
+    return session['csrf_token']
+
+def _safe_next(target):
+    """Hanya izinkan redirect internal (cegah open redirect)."""
+    if not target:
+        return None
+    parsed = urlparse(target)
+    if parsed.scheme or parsed.netloc:
+        return None
+    if not target.startswith('/'):
+        return None
+    return target
+
+def _wants_json():
+    return request.path.startswith('/api/') or request.is_json
+
+@app.before_request
+def load_logged_in_user():
+    g.user = None
+    user_id = session.get('user_id')
+    if not user_id:
+        return
+    user = database.get_user_by_id(user_id)
+    if not user or not user.get('is_active'):
+        session.clear()
+        return
+    g.user = user
+
+@app.before_request
+def security_guard():
+    endpoint = request.endpoint
+    # Aset statis dan health-check Android tetap dapat diakses tanpa login.
+    if endpoint in ('static', 'system_status', 'manifest', 'service_worker'):
+        return
+
+    # --- Proteksi CSRF untuk semua request yang mengubah data ---
+    if request.method in ('POST', 'PUT', 'PATCH', 'DELETE'):
+        if app.config.get('CSRF_ENABLED', True):
+            sent = request.headers.get('X-CSRF-Token') or request.form.get('csrf_token', '')
+            expected = session.get('csrf_token', '')
+            if not expected or not sent or not hmac.compare_digest(str(sent), str(expected)):
+                message = "Sesi keamanan tidak valid atau sudah kedaluwarsa. Muat ulang halaman lalu coba lagi."
+                if _wants_json():
+                    return jsonify({'success': False, 'message': message}), 400
+                flash(message, "danger")
+                return redirect(url_for('login') if not g.user else url_for('dashboard'))
+
+    # --- Wajib login ---
+    if endpoint == 'login':
+        if g.user:
+            return redirect(url_for('dashboard'))
+        return
+    if not g.user:
+        if _wants_json():
+            return jsonify({'success': False, 'message': 'Silakan login terlebih dahulu.'}), 401
+        return redirect(url_for('login', next=request.path if request.method == 'GET' else None))
+
+    # --- Paksa ganti sandi default ---
+    if g.user.get('must_change_password') and endpoint not in (
+        'account', 'change_password', 'logout', 'static', 'login'
+    ):
+        if _wants_json():
+            return jsonify({
+                'success': False,
+                'message': 'Ganti password default terlebih dahulu melalui menu Akun.'
+            }), 403
+        return redirect(url_for('account'))
+
+    # --- Otorisasi role ---
+    if endpoint in ADMIN_ENDPOINTS and g.user.get('role') != 'admin':
+        abort(403)
 
 # Initialize database on startup
 with app.app_context():
@@ -68,24 +215,174 @@ def datetime_format(value):
     except Exception:
         return str(value)
 
+def parse_money(value, field='Nilai'):
+    """Parse uang menjadi Decimal 2 desimal; tolak NaN/Infinity/negatif."""
+    try:
+        amount = Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        raise ValueError(f"{field} harus berupa angka yang valid.")
+    if not amount.is_finite() or amount < 0:
+        raise ValueError(f"{field} harus berupa angka 0 atau lebih.")
+    return amount.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+def parse_quantity(value, field='Kuantitas', allow_negative=False):
+    """Parse kuantitas menjadi Decimal 3 desimal; tolak NaN/Infinity."""
+    try:
+        qty = Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        raise ValueError(f"{field} harus berupa angka yang valid.")
+    if not qty.is_finite():
+        raise ValueError(f"{field} tidak valid.")
+    if not allow_negative and qty <= 0:
+        raise ValueError(f"{field} harus lebih dari 0.")
+    if allow_negative and qty < 0:
+        raise ValueError(f"{field} tidak boleh negatif.")
+    return qty.quantize(Decimal('0.001'), rounding=ROUND_HALF_UP)
+
+def money_float(value):
+    return float(parse_money(value))
+
 @app.context_processor
 def inject_global_data():
     # BUG-03 FIX: Gunakan try/finally agar koneksi selalu ditutup meski terjadi error
-    conn = database.get_db()
+    critical_count = 0
+    conn = None
     try:
+        conn = database.get_db()
         cursor = conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM materials WHERE is_active = 1 AND stock <= min_stock")
         critical_count = cursor.fetchone()[0]
     except Exception:
         critical_count = 0
     finally:
-        conn.close()
+        if conn is not None:
+            conn.close()
+    user = g.get('user')
     return {
         'app_name': 'AL-CIVIL',
         'app_tagline': 'Civil & Construction Warehouse System',
         'critical_count': critical_count,
-        'current_year': datetime.now().year
+        'current_year': datetime.now().year,
+        'csrf_token': get_csrf_token,
+        'current_user': user,
+        'is_admin': bool(user and user.get('role') == 'admin'),
     }
+
+# ==========================================
+# AUTENTIKASI & MANAJEMEN AKUN
+# ==========================================
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    next_url = _safe_next(request.args.get('next') or request.form.get('next'))
+    if request.method == 'POST':
+        ip = _client_ip()
+        if _login_blocked(ip):
+            flash("Terlalu banyak percobaan login. Tunggu 5 menit lalu coba lagi.", "danger")
+            return render_template('login.html', next_url=next_url), 429
+
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        user = database.authenticate(username, password)
+        if not user:
+            _record_login_failure(ip)
+            flash("Username atau password salah.", "danger")
+            return render_template('login.html', next_url=next_url), 401
+
+        _clear_login_failures(ip)
+        session.clear()
+        session['user_id'] = user['id']
+        session.permanent = True
+        get_csrf_token()
+        database.touch_last_login(user['id'])
+
+        if user.get('must_change_password'):
+            flash("Demi keamanan, ganti password default Anda terlebih dahulu.", "warning")
+            return redirect(url_for('account'))
+        return redirect(next_url or url_for('dashboard'))
+
+    return render_template('login.html', next_url=next_url)
+
+@app.route('/logout', methods=['POST'])
+def logout():
+    session.clear()
+    flash("Anda telah keluar dari sistem.", "success")
+    return redirect(url_for('login'))
+
+@app.route('/account')
+def account():
+    return render_template('account.html')
+
+@app.route('/account/password', methods=['POST'])
+def change_password():
+    current_password = request.form.get('current_password', '')
+    new_password = request.form.get('new_password', '')
+    confirm_password = request.form.get('confirm_password', '')
+
+    if not database.authenticate(g.user['username'], current_password):
+        flash("Password saat ini tidak sesuai.", "danger")
+        return redirect(url_for('account'))
+    if len(new_password) < 8:
+        flash("Password baru minimal 8 karakter.", "danger")
+        return redirect(url_for('account'))
+    if new_password != confirm_password:
+        flash("Konfirmasi password baru tidak cocok.", "danger")
+        return redirect(url_for('account'))
+    if new_password == current_password:
+        flash("Password baru harus berbeda dari password saat ini.", "danger")
+        return redirect(url_for('account'))
+
+    ok, message = database.set_user_password(g.user['id'], new_password, must_change_password=0)
+    if ok:
+        flash("Password berhasil diperbarui.", "success")
+        return redirect(url_for('dashboard'))
+    flash(message, "danger")
+    return redirect(url_for('account'))
+
+@app.route('/users')
+def users_view():
+    return render_template('users.html', users=database.list_users(),
+                           default_username=database.DEFAULT_ADMIN_USERNAME)
+
+@app.route('/users/create', methods=['POST'])
+def user_create():
+    username = request.form.get('username', '').strip()
+    display_name = request.form.get('display_name', '').strip()
+    password = request.form.get('password', '')
+    role = request.form.get('role', 'operator').strip().lower()
+
+    if not username or not (3 <= len(username) <= 32) or not username.replace('_', '').replace('.', '').replace('-', '').isalnum():
+        flash("Username harus 3-32 karakter (huruf, angka, titik, garis bawah, atau strip).", "danger")
+        return redirect(url_for('users_view'))
+    if len(password) < 8:
+        flash("Password minimal 8 karakter.", "danger")
+        return redirect(url_for('users_view'))
+    if role not in ('admin', 'operator'):
+        flash("Role tidak valid.", "danger")
+        return redirect(url_for('users_view'))
+
+    ok, message = database.create_user(username, password, role, display_name)
+    flash(message, "success" if ok else "danger")
+    return redirect(url_for('users_view'))
+
+@app.route('/users/<int:user_id>/password', methods=['POST'])
+def user_reset_password(user_id):
+    new_password = request.form.get('new_password', '')
+    if len(new_password) < 8:
+        flash("Password baru minimal 8 karakter.", "danger")
+        return redirect(url_for('users_view'))
+    ok, message = database.set_user_password(user_id, new_password, must_change_password=1)
+    flash(message, "success" if ok else "danger")
+    return redirect(url_for('users_view'))
+
+@app.route('/users/<int:user_id>/toggle', methods=['POST'])
+def user_toggle_active(user_id):
+    if user_id == g.user['id']:
+        flash("Anda tidak dapat menonaktifkan akun sendiri.", "danger")
+        return redirect(url_for('users_view'))
+    activate = request.form.get('action') == 'activate'
+    ok, message = database.set_user_active(user_id, activate)
+    flash(message, "success" if ok else "danger")
+    return redirect(url_for('users_view'))
 
 # ==========================================
 # DASHBOARD
@@ -210,8 +507,21 @@ def inventory():
     elif status_filter == 'safe':
         query += " AND stock > min_stock"
 
-    query += " ORDER BY category ASC, name ASC"
-    cursor.execute(query, params)
+    # Pagination: batasi jumlah baris agar halaman tetap ringan di HP.
+    per_page = 100
+    try:
+        page = max(1, int(request.args.get('page', 1)))
+    except (TypeError, ValueError):
+        page = 1
+
+    count_query = "SELECT COUNT(*) FROM materials WHERE " + query.split(" WHERE ", 1)[1]
+    cursor.execute(count_query, params)
+    total_count = cursor.fetchone()[0]
+    total_pages = max(1, math.ceil(total_count / per_page))
+    page = min(page, total_pages)
+
+    cursor.execute(query + " ORDER BY category ASC, name ASC LIMIT ? OFFSET ?",
+                   params + [per_page, (page - 1) * per_page])
     materials = [dict(row) for row in cursor.fetchall()]
 
     # Daftar kategori mengikuti status yang sedang dilihat agar filter tetap relevan
@@ -236,7 +546,10 @@ def inventory():
                            archived_count=archived_count,
                            search=search,
                            current_category=category,
-                           status_filter=status_filter)
+                           status_filter=status_filter,
+                           page=page,
+                           total_pages=total_pages,
+                           total_count=total_count)
 
 @app.route('/material/save', methods=['POST'])
 def save_material():
@@ -255,13 +568,14 @@ def save_material():
         return redirect(url_for('inventory'))
 
     try:
-        stock = float(request.form.get('stock', 0))
-        min_stock = float(request.form.get('min_stock', 10))
-        unit_price = float(request.form.get('unit_price', 0))
-        if stock < 0 or min_stock < 0 or unit_price < 0:
-            raise ValueError("Nilai tidak boleh negatif")
-    except (ValueError, TypeError):
-        flash("Gagal: Stok, Stok Minimal, dan Harga Satuan harus berupa angka positif!", "danger")
+        stock = float(parse_quantity(request.form.get('stock', 0), 'Stok Awal',
+                                     allow_negative=True))
+        min_stock = float(parse_quantity(request.form.get('min_stock', 10),
+                                         'Batas Stok Minimal', allow_negative=True))
+        unit_price = float(parse_money(request.form.get('unit_price', 0),
+                                       'Harga Satuan'))
+    except (ValueError, TypeError) as e:
+        flash(f"Gagal: {e}", "danger")
         return redirect(url_for('inventory'))
 
     conn = database.get_db()
@@ -269,14 +583,21 @@ def save_material():
 
     try:
         if material_id:
+            # Stok TIDAK boleh diubah dari form master. Semua koreksi stok wajib
+            # lewat Stock Opname agar tercatat di audit trail.
             cursor.execute("""
                 UPDATE materials
                 SET sku = ?, barcode = ?, name = ?, category = ?, unit = ?,
-                    stock = ?, min_stock = ?, unit_price = ?, location = ?,
+                    min_stock = ?, unit_price = ?, location = ?,
                     specification = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
-            """, (sku, barcode, name, category, unit, stock, min_stock, unit_price, location, specification, material_id))
-            flash(f"Material {name} berhasil diperbarui!", "success")
+            """, (sku, barcode, name, category, unit, min_stock, unit_price,
+                  location, specification, material_id))
+            flash(
+                f"Material {name} berhasil diperbarui. Perubahan stok hanya "
+                "melalui menu Stock Opname.",
+                "success"
+            )
         else:
             cursor.execute("""
                 INSERT INTO materials (sku, barcode, name, category, unit, stock, min_stock, unit_price, location, specification)
@@ -413,12 +734,27 @@ def transactions():
         s = f"%{search}%"
         params.extend([s, s, s, s])
 
-    query += " ORDER BY t.created_at DESC"
-    cursor.execute(query, params)
+    per_page = 50
+    try:
+        page = max(1, int(request.args.get('page', 1)))
+    except (TypeError, ValueError):
+        page = 1
+
+    count_query = "SELECT COUNT(*) FROM transactions t WHERE " + query.split(" WHERE ", 1)[1]
+    cursor.execute(count_query, params)
+    total_count = cursor.fetchone()[0]
+    total_pages = max(1, math.ceil(total_count / per_page))
+    page = min(page, total_pages)
+
+    cursor.execute(query + " ORDER BY t.created_at DESC LIMIT ? OFFSET ?",
+                   params + [per_page, (page - 1) * per_page])
     tx_list = [dict(row) for row in cursor.fetchall()]
     conn.close()
 
-    return render_template('transactions.html', transactions=tx_list, filter_type=filter_type, search=search)
+    return render_template('transactions.html', transactions=tx_list,
+                           filter_type=filter_type, search=search,
+                           page=page, total_pages=total_pages,
+                           total_count=total_count)
 
 @app.route('/slip/<int:tx_id>')
 def view_slip(tx_id):
@@ -654,18 +990,18 @@ def save_stock_opname():
         return redirect(url_for('stock_opname'))
 
     try:
-        new_stock = float(request.form.get('new_stock', ''))
-    except (TypeError, ValueError):
-        flash("Gagal: Hasil perhitungan fisik harus berupa angka!", "danger")
-        return redirect(url_for('stock_opname'))
-
-    if new_stock < 0:
-        flash("Gagal: Stok fisik tidak boleh bernilai negatif!", "danger")
+        new_stock_dec = parse_quantity(request.form.get('new_stock', ''),
+                                       'Stok fisik', allow_negative=True)
+    except (TypeError, ValueError) as e:
+        flash(f"Gagal: {e}", "danger")
         return redirect(url_for('stock_opname'))
 
     reason = request.form.get('reason', '').strip()
     if not reason:
         flash("Gagal: Alasan penyesuaian wajib diisi!", "danger")
+        return redirect(url_for('stock_opname'))
+    if len(reason) > 500:
+        flash("Gagal: Alasan penyesuaian maksimal 500 karakter.", "danger")
         return redirect(url_for('stock_opname'))
 
     adjusted_by = request.form.get('adjusted_by', '').strip() or 'Auditor Lapangan AL-CIVIL'
@@ -674,16 +1010,28 @@ def save_stock_opname():
     cursor = conn.cursor()
 
     try:
-        cursor.execute("SELECT stock, name, sku, unit FROM materials WHERE id = ? AND is_active = 1", (material_id,))
-        mat = cursor.fetchone()
-        if not mat:
-            flash("Material tidak valid atau sudah diarsipkan!", "danger")
-            return redirect(url_for('stock_opname'))
-
-        old_stock = mat['stock']
-        diff = new_stock - old_stock
-
+        # Baca stok lama DI DALAM lock supaya dua opname bersamaan tidak
+        # menghitung selisih dari nilai stok yang sudah basi.
         with tx_write_lock:
+            cursor.execute(
+                "SELECT stock, name, sku, unit FROM materials "
+                "WHERE id = ? AND is_active = 1",
+                (material_id,)
+            )
+            mat = cursor.fetchone()
+            if not mat:
+                conn.rollback()
+                flash("Material tidak valid atau sudah diarsipkan!", "danger")
+                return redirect(url_for('stock_opname'))
+
+            old_stock_dec = Decimal(str(mat['stock']))
+            new_stock = float(new_stock_dec)
+            old_stock = mat['stock']
+            diff_dec = (new_stock_dec - old_stock_dec).quantize(
+                Decimal('0.001'), rounding=ROUND_HALF_UP
+            )
+            diff = float(diff_dec)
+
             # Update Material Stock
             cursor.execute("""
                 UPDATE materials
@@ -784,6 +1132,18 @@ def export_transactions():
 # ==========================================
 # BACKUP & RESTORE DATA (MIGRASI SERVER / TERMUX)
 # ==========================================
+def _safe_backup_path(filename):
+    """Kembalikan path backup hanya jika berada di dalam folder backups/."""
+    safe_name = secure_filename(filename)
+    if not safe_name or not (safe_name.endswith('.db') or safe_name.endswith('.json')):
+        return None
+    filepath = os.path.realpath(os.path.join(database.BACKUP_DIR, safe_name))
+    if os.path.dirname(filepath) != os.path.realpath(database.BACKUP_DIR):
+        return None
+    if not os.path.isfile(filepath):
+        return None
+    return filepath, safe_name
+
 @app.route('/backup')
 def backup_view():
     stats = database.get_database_stats()
@@ -793,7 +1153,8 @@ def backup_view():
 @app.route('/backup/create', methods=['POST'])
 def backup_create():
     try:
-        filename, path = database.backup_to_sqlite()
+        with tx_write_lock:
+            filename, path = database.backup_to_sqlite()
         flash(f"✅ Snapshot database berhasil dibuat di server: {filename}", "success")
     except Exception as e:
         flash(f"⚠️ Gagal membuat backup: {str(e)}", "danger")
@@ -802,7 +1163,8 @@ def backup_create():
 @app.route('/backup/download/db')
 def backup_download_db():
     try:
-        filename, filepath = database.backup_to_sqlite()
+        with tx_write_lock:
+            filename, filepath = database.backup_to_sqlite()
         download_name = f"AL-CIVIL_Database_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
         return send_file(
             filepath,
@@ -817,7 +1179,8 @@ def backup_download_db():
 @app.route('/backup/download/json')
 def backup_download_json():
     try:
-        payload = database.backup_to_json()
+        with tx_write_lock:
+            payload = database.backup_to_json()
         output = io.BytesIO()
         output.write(json.dumps(payload, ensure_ascii=False, indent=2).encode('utf-8'))
         output.seek(0)
@@ -833,11 +1196,11 @@ def backup_download_json():
 
 @app.route('/backup/download/file/<filename>')
 def backup_download_file(filename):
-    safe_name = secure_filename(filename)
-    filepath = os.path.join(database.BACKUP_DIR, safe_name)
-    if not os.path.exists(filepath):
+    resolved = _safe_backup_path(filename)
+    if not resolved:
         flash("⚠️ File backup tidak ditemukan di server.", "danger")
         return redirect(url_for('backup_view'))
+    filepath, safe_name = resolved
     mimetype = "application/x-sqlite3" if safe_name.endswith('.db') else "application/json"
     return send_file(
         filepath,
@@ -865,14 +1228,24 @@ def backup_import():
         return redirect(url_for('backup_view'))
 
     import_mode = request.form.get('import_mode', 'replace')
+    if import_mode not in ('replace', 'merge'):
+        import_mode = 'replace'
 
     if ext in ['.db', '.sqlite', '.sqlite3']:
-        temp_path = os.path.join(database.BACKUP_DIR, f"temp_upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db")
+        temp_path = os.path.join(
+            database.BACKUP_DIR,
+            f"temp_upload_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}_{secrets.token_hex(4)}.db"
+        )
         try:
             file.save(temp_path)
-            success, msg = database.restore_from_sqlite(temp_path)
+            with tx_write_lock:
+                success, msg = database.restore_from_sqlite(temp_path)
             if success:
-                flash(f"🎉 AL-CIVIL berhasil dipulihkan dari database! {msg}", "success")
+                flash(
+                    f"🎉 AL-CIVIL berhasil dipulihkan dari database! {msg} "
+                    "Disarankan restart server agar seluruh koneksi memakai database baru.",
+                    "success"
+                )
             else:
                 flash(f"⚠️ Gagal memulihkan database: {msg}", "danger")
         except Exception as e:
@@ -887,9 +1260,10 @@ def backup_import():
         try:
             content = file.read().decode('utf-8')
             payload = json.loads(content)
-            success, msg = database.restore_from_json(payload, mode=import_mode)
+            with tx_write_lock:
+                success, msg = database.restore_from_json(payload, mode=import_mode)
             if success:
-                flash(f"🎉 Data JSON berhasil diimpor ke sistem! ({import_mode})", "success")
+                flash(f"🎉 Data JSON berhasil diimpor ke sistem! ({import_mode}) {msg}", "success")
             else:
                 flash(f"⚠️ Gagal mengimpor JSON: {msg}", "danger")
         except json.JSONDecodeError:
@@ -901,26 +1275,32 @@ def backup_import():
 
 @app.route('/backup/restore/<filename>', methods=['POST'])
 def backup_restore_local(filename):
-    safe_name = secure_filename(filename)
-    filepath = os.path.join(database.BACKUP_DIR, safe_name)
-    if not os.path.exists(filepath):
+    resolved = _safe_backup_path(filename)
+    if not resolved:
         flash("⚠️ File backup lokal tidak ditemukan.", "danger")
         return redirect(url_for('backup_view'))
+    filepath, safe_name = resolved
 
     if safe_name.endswith('.db'):
-        success, msg = database.restore_from_sqlite(filepath)
+        with tx_write_lock:
+            success, msg = database.restore_from_sqlite(filepath)
     elif safe_name.endswith('.json'):
         try:
             with open(filepath, 'r', encoding='utf-8') as f:
                 payload = json.load(f)
-            success, msg = database.restore_from_json(payload, mode='replace')
+            with tx_write_lock:
+                success, msg = database.restore_from_json(payload, mode='replace')
         except Exception as e:
             success, msg = False, str(e)
     else:
         success, msg = False, "Tipe file tidak dikenali."
 
     if success:
-        flash(f"🎉 Berhasil memulihkan sistem dari backup lokal: {safe_name}", "success")
+        flash(
+            f"🎉 Berhasil memulihkan sistem dari backup lokal: {safe_name}. "
+            "Disarankan restart server.",
+            "success"
+        )
     else:
         flash(f"⚠️ Gagal restore: {msg}", "danger")
 
@@ -990,17 +1370,22 @@ def api_create_transaction():
     if not isinstance(items, list) or not items:
         return jsonify({'success': False, 'message': 'Daftar barang tidak boleh kosong!'}), 400
 
-    def clean(value, default=''):
-        return str(value).strip() if value is not None else default
+    def clean(value, default='', limit=500):
+        text = str(value).strip() if value is not None else default
+        return text[:limit]
 
+    default_operator = (
+        (g.user.get('display_name') or g.user.get('username'))
+        if g.user else 'Petugas Gudang AL-CIVIL'
+    )
     project_id = data.get('project_id') or None
-    project_name = clean(data.get('project_name'))
+    project_name = clean(data.get('project_name'), limit=200)
     supplier_id = data.get('supplier_id') or None
-    supplier_name = clean(data.get('supplier_name'))
-    vehicle_number = clean(data.get('vehicle_number')).upper()
-    driver_name = clean(data.get('driver_name'))
-    operator_name = clean(data.get('operator_name'), 'Petugas Gudang AL-CIVIL') or 'Petugas Gudang AL-CIVIL'
-    notes = clean(data.get('notes'))
+    supplier_name = clean(data.get('supplier_name'), limit=200)
+    vehicle_number = clean(data.get('vehicle_number'), limit=40).upper()
+    driver_name = clean(data.get('driver_name'), limit=100)
+    operator_name = clean(data.get('operator_name'), default_operator, limit=100) or default_operator
+    notes = clean(data.get('notes'), limit=1000)
 
     # Penerimaan barang (IN) boleh membawa harga beli aktual per item. Bila
     # klien lama tidak mengirim flag ini, default-nya harga master ikut
@@ -1020,18 +1405,23 @@ def api_create_transaction():
         materials_by_id = {}
         requested_qty = {}
 
+        if len(items) > 200:
+            raise ValueError("Maksimal 200 baris barang per transaksi.")
+
         for item in items:
             if not isinstance(item, dict):
                 raise ValueError("Format daftar barang tidak valid.")
 
             try:
                 mat_id = int(item.get('material_id'))
-                qty = float(item.get('qty'))
             except (TypeError, ValueError, OverflowError):
-                raise ValueError("ID material atau kuantitas barang tidak valid.")
+                raise ValueError("ID material tidak valid.")
 
-            if not math.isfinite(qty) or qty <= 0:
-                raise ValueError("Kuantitas setiap barang harus berupa angka lebih dari 0.")
+            try:
+                qty_dec = parse_quantity(item.get('qty'))
+            except (TypeError, ValueError) as e:
+                raise ValueError(f"Kuantitas barang tidak valid: {e}")
+            qty = float(qty_dec)
 
             if mat_id not in materials_by_id:
                 cursor.execute(
@@ -1046,29 +1436,25 @@ def api_create_transaction():
             mat = materials_by_id[mat_id]
             requested_qty[mat_id] = requested_qty.get(mat_id, 0) + qty
 
-            master_price = float(mat['unit_price'] or 0)
-
-            # Untuk OUT, harga selalu dari master agar nilai surat jalan tidak
-            # bisa dimanipulasi dari browser. Untuk IN, harga beli aktual dari
-            # form penerimaan dipakai dan (opsional) disimpan ke master.
-            if tx_type == 'IN' and item.get('unit_price') not in (None, ''):
-                try:
-                    unit_price = float(item.get('unit_price'))
-                except (TypeError, ValueError, OverflowError):
-                    raise ValueError(
-                        f"Harga satuan untuk '{mat['name']}' tidak valid."
+            try:
+                master_price_dec = parse_money(mat['unit_price'] or 0, 'Harga master')
+                # Untuk OUT, harga selalu dari master agar nilai surat jalan tidak
+                # bisa dimanipulasi dari browser. Untuk IN, harga beli aktual dari
+                # form penerimaan dipakai dan (opsional) disimpan ke master.
+                if tx_type == 'IN' and item.get('unit_price') not in (None, ''):
+                    unit_price_dec = parse_money(
+                        item.get('unit_price'),
+                        f"Harga satuan untuk '{mat['name']}'"
                     )
-                if not math.isfinite(unit_price) or unit_price < 0:
-                    raise ValueError(
-                        f"Harga satuan untuk '{mat['name']}' harus berupa angka 0 atau lebih."
-                    )
-            else:
-                unit_price = master_price
+                else:
+                    unit_price_dec = master_price_dec
+            except (TypeError, ValueError) as e:
+                raise ValueError(str(e))
 
-            if not math.isfinite(unit_price * qty):
-                raise ValueError(
-                    f"Nilai total untuk '{mat['name']}' terlalu besar / tidak valid."
-                )
+            line_total_dec = (qty_dec * unit_price_dec).quantize(
+                Decimal('0.01'), rounding=ROUND_HALF_UP
+            )
+            unit_price = float(unit_price_dec)
 
             normalized_items.append({
                 'material_id': mat_id,
@@ -1076,8 +1462,10 @@ def api_create_transaction():
                 'material_name': mat['name'],
                 'unit': mat['unit'],
                 'qty': qty,
+                'qty_dec': qty_dec,
                 'unit_price': unit_price,
-                'notes': clean(item.get('notes'))
+                'line_total': float(line_total_dec),
+                'notes': clean(item.get('notes'), limit=500)
             })
 
         # --- Validasi tujuan pengiriman / vendor ---
@@ -1090,7 +1478,8 @@ def api_create_transaction():
             project_row = cursor.fetchone()
             if not project_row:
                 raise ValueError("Proyek tujuan tidak ditemukan. Muat ulang halaman lalu coba lagi.")
-            project_name = project_name or project_row['name']
+            # Nama proyek selalu diambil dari database, bukan dari payload browser.
+            project_name = project_row['name']
             supplier_id, supplier_name = None, ''
 
             # Cek stok agregat (bila material yang sama muncul lebih dari sekali)
@@ -1110,14 +1499,16 @@ def api_create_transaction():
             supplier_row = cursor.fetchone()
             if not supplier_row:
                 raise ValueError("Vendor / supplier tidak ditemukan. Muat ulang halaman lalu coba lagi.")
-            supplier_name = supplier_name or supplier_row['name']
+            supplier_name = supplier_row['name']
             project_id, project_name = None, ''
 
         total_items_count = len(normalized_items)
-        total_qty = sum(i['qty'] for i in normalized_items)
-        total_amount = sum(i['qty'] * i['unit_price'] for i in normalized_items)
-        if not math.isfinite(total_qty) or not math.isfinite(total_amount):
-            raise ValueError("Total kuantitas / nilai transaksi tidak valid.")
+        total_qty_dec = sum((i['qty_dec'] for i in normalized_items), Decimal('0'))
+        total_amount_dec = sum(
+            (Decimal(str(i['line_total'])) for i in normalized_items), Decimal('0')
+        ).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        total_qty = float(total_qty_dec.quantize(Decimal('0.001')))
+        total_amount = float(total_amount_dec)
 
         # Kunci proses tulis supaya nomor dokumen + stok selalu konsisten
         # meskipun ada dua request transaksi bersamaan.
@@ -1141,7 +1532,7 @@ def api_create_transaction():
                 mat_id = item['material_id']
                 qty = item['qty']
                 unit_price = item['unit_price']
-                line_total = qty * unit_price
+                line_total = item['line_total']
 
                 cursor.execute("""
                     INSERT INTO transaction_items (
@@ -1179,18 +1570,18 @@ def api_create_transaction():
                 received_value = {}
                 for item in normalized_items:
                     mid = item['material_id']
-                    received_qty[mid] = received_qty.get(mid, 0) + item['qty']
-                    received_value[mid] = received_value.get(mid, 0) + (
-                        item['qty'] * item['unit_price']
+                    received_qty[mid] = received_qty.get(mid, Decimal('0')) + item['qty_dec']
+                    received_value[mid] = received_value.get(mid, Decimal('0')) + (
+                        item['qty_dec'] * Decimal(str(item['unit_price']))
                     )
 
                 for mid, qty in received_qty.items():
-                    avg_price = received_value[mid] / qty
-                    if not math.isfinite(avg_price):
-                        raise ValueError(
-                            f"Harga rata-rata material ID {mid} tidak valid."
-                        )
-                    new_price = round(avg_price, 2)
+                    if qty <= 0:
+                        continue
+                    new_price_dec = (received_value[mid] / qty).quantize(
+                        Decimal('0.01'), rounding=ROUND_HALF_UP
+                    )
+                    new_price = float(new_price_dec)
                     old_price = float(materials_by_id[mid]['unit_price'] or 0)
                     if abs(new_price - old_price) < 0.005:
                         continue
