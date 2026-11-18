@@ -2,6 +2,10 @@ import os
 import sys
 import tempfile
 import unittest
+import json
+import shutil
+import sqlite3
+from io import BytesIO
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ALCIVIL_DIR = os.path.join(BASE_DIR, 'al-civil') if os.path.exists(os.path.join(BASE_DIR, 'al-civil')) else BASE_DIR
@@ -326,6 +330,464 @@ class AlCivilAppTests(unittest.TestCase):
         # Search
         res_search = self.client.get('/transaksi?search=Pak')
         self.assertEqual(res_search.status_code, 200)
+
+# ==========================================================
+# TESTS: BACKUP, EXPORT, RESTORE & MIGRASI DATA
+# ==========================================================
+class BackupRestoreTests(unittest.TestCase):
+    """Tes backup/restore dengan database & folder backups/ terisolasi.
+
+    Kelas ini memakai DB sementara sendiri sehingga saga mutasi data tidak
+    memengaruhi tes aplikasi di atasnya maupun data produksi ``alcivil.db``.
+    """
+
+    ADMIN_PASSWORD = 'BackupTestPass2026!'
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmpdir = tempfile.mkdtemp(prefix='alcivil-backup-test-')
+        cls._orig_db_path = database.DB_PATH
+        cls._orig_backup_dir = database.BACKUP_DIR
+
+        database.DB_PATH = os.path.join(cls.tmpdir, 'alcivil_test.db')
+        database.BACKUP_DIR = os.path.join(cls.tmpdir, 'backups')
+        os.makedirs(database.BACKUP_DIR, exist_ok=True)
+        database.init_db()
+
+        admin = database.get_user_by_username('admin')
+        database.set_user_password(admin['id'], cls.ADMIN_PASSWORD,
+                                   must_change_password=0)
+
+        alcivil_app.app.config['TESTING'] = True
+        cls.client = alcivil_app.app.test_client()
+
+    @classmethod
+    def tearDownClass(cls):
+        database.DB_PATH = cls._orig_db_path
+        database.BACKUP_DIR = cls._orig_backup_dir
+        shutil.rmtree(cls.tmpdir, ignore_errors=True)
+
+    # ------------------------- helpers -------------------------
+
+    def login(self, username='admin', password=None):
+        with self.client.session_transaction() as sess:
+            sess.clear()
+            sess['csrf_token'] = 'test-csrf-token'
+        return self.client.post('/login', data={
+            'username': username,
+            'password': password or self.ADMIN_PASSWORD,
+            'csrf_token': 'test-csrf-token',
+        }, follow_redirects=True)
+
+    def csrf(self):
+        with self.client.session_transaction() as sess:
+            return sess.get('csrf_token') or 'test-csrf-token'
+
+    def count(self, table, path=None):
+        conn = sqlite3.connect(path or database.DB_PATH)
+        try:
+            return conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+        finally:
+            conn.close()
+
+    def stock_of(self, sku, path=None):
+        conn = sqlite3.connect(path or database.DB_PATH)
+        conn.row_factory = sqlite3.Row
+        try:
+            row = conn.execute(
+                "SELECT stock FROM materials WHERE sku = ?", (sku,)
+            ).fetchone()
+            return row['stock'] if row else None
+        finally:
+            conn.close()
+
+    def mutate(self):
+        """Ubah data supaya terbukti restore benar-benar mengembalikan keadaan."""
+        conn = database.get_db()
+        try:
+            conn.execute(
+                "UPDATE materials SET stock = stock + 77 WHERE sku = 'BES-001'"
+            )
+            conn.execute(
+                "INSERT INTO materials "
+                "(sku, name, category, unit, stock, min_stock, unit_price) "
+                "VALUES ('TST-MUT-01', 'Material Uji Mutasi', 'Besi & Baja', "
+                "'Batang', 5, 1, 1000)"
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def assert_fk_clean(self):
+        conn = database.get_db()
+        try:
+            self.assertEqual(
+                conn.execute("PRAGMA foreign_key_check").fetchall(), []
+            )
+        finally:
+            conn.close()
+
+    # --------------------------- tes ---------------------------
+
+    def test_01_sqlite_snapshot_valid_dan_konsisten(self):
+        filename, path = database.backup_to_sqlite()
+        self.assertTrue(filename.startswith('alcivil_backup_'))
+        self.assertTrue(filename.endswith('.db'))
+        self.assertTrue(os.path.isfile(path))
+
+        ok, msg = database.validate_sqlite_backup(path)
+        self.assertTrue(ok, msg)
+        for table in ['materials', 'projects', 'suppliers', 'transactions',
+                      'transaction_items', 'stock_adjustments']:
+            self.assertEqual(self.count(table), self.count(table, path), table)
+
+    def test_02_export_json_lengkap_dan_tanpa_kredensial(self):
+        payload = database.backup_to_json()
+        self.assertEqual(payload['format'], 'alcivil_json_backup')
+        self.assertEqual(payload['app'], 'AL-CIVIL WMS')
+        self.assertIn('exported_at', payload)
+
+        for table in ['materials', 'projects', 'suppliers', 'transactions',
+                      'transaction_items', 'stock_adjustments']:
+            self.assertIn(table, payload['data'])
+            self.assertEqual(payload['summary'][table],
+                             len(payload['data'][table]), table)
+
+        # Tabel users (hash password) tidak boleh ikut terekspor.
+        self.assertNotIn('users', payload['data'])
+        self.assertNotIn('password_hash', json.dumps(payload))
+
+    def test_03_restore_json_replace_mengembalikan_data(self):
+        payload = database.backup_to_json()
+        original_stock = self.stock_of('BES-001')
+        self.mutate()
+
+        ok, msg = database.restore_from_json(payload, mode='replace')
+        self.assertTrue(ok, msg)
+        self.assertEqual(self.stock_of('BES-001'), original_stock)
+        self.assertIsNone(self.stock_of('TST-MUT-01'))
+        for table, expected in payload['summary'].items():
+            self.assertEqual(self.count(table), expected, table)
+        self.assert_fk_clean()
+
+    def test_04_restore_sqlite_dan_snapshot_pengaman(self):
+        _, snapshot_path = database.backup_to_sqlite()
+        original_stock = self.stock_of('BES-001')
+        self.mutate()
+
+        ok, msg = database.restore_from_sqlite(snapshot_path)
+        self.assertTrue(ok, msg)
+        self.assertEqual(self.stock_of('BES-001'), original_stock)
+        self.assertIsNone(self.stock_of('TST-MUT-01'))
+
+        safety = [f for f in os.listdir(database.BACKUP_DIR)
+                  if f.startswith('pre_restore_')
+                  and not f.startswith('pre_restore_json_')
+                  and f.endswith('.db')]
+        self.assertTrue(safety, "snapshot pengaman pra-restore tidak dibuat")
+        safety_path = os.path.join(database.BACKUP_DIR, sorted(safety)[-1])
+        valid, vmsg = database.validate_sqlite_backup(safety_path)
+        self.assertTrue(valid, vmsg)
+        # Snapshot pengaman diambil sebelum restore, jadi masih memuat mutasi.
+        self.assertIsNotNone(self.stock_of('TST-MUT-01', safety_path))
+
+    def test_05_file_sqlite_tidak_valid_ditolak(self):
+        empty = os.path.join(self.tmpdir, 'empty.db')
+        open(empty, 'wb').close()
+
+        text = os.path.join(self.tmpdir, 'text.db')
+        with open(text, 'wb') as f:
+            f.write(b'ini bukan database sqlite')
+
+        missing = os.path.join(self.tmpdir, 'missing.db')
+        conn = sqlite3.connect(missing)
+        conn.execute("CREATE TABLE foo (id INTEGER)")
+        conn.commit()
+        conn.close()
+
+        trigger = os.path.join(self.tmpdir, 'trigger.db')
+        conn = sqlite3.connect(trigger)
+        conn.executescript("""
+            CREATE TABLE materials (id INTEGER PRIMARY KEY, sku TEXT, name TEXT,
+                                    category TEXT, unit TEXT, stock INTEGER);
+            CREATE TABLE projects (id INTEGER PRIMARY KEY, code TEXT, name TEXT);
+            CREATE TABLE suppliers (id INTEGER PRIMARY KEY, code TEXT, name TEXT);
+            CREATE TABLE transactions (id INTEGER PRIMARY KEY,
+                                       transaction_number TEXT, type TEXT);
+            CREATE TABLE transaction_items (id INTEGER PRIMARY KEY,
+                                            transaction_id INTEGER,
+                                            material_id INTEGER, qty REAL);
+            CREATE TRIGGER evil_trigger AFTER INSERT ON materials
+            BEGIN SELECT 1; END;
+        """)
+        conn.commit()
+        conn.close()
+
+        cases = [
+            (empty, 'kosong'),
+            (text, 'bukan database'),
+            (missing, 'tabel hilang'),
+            (trigger, 'tidak diizinkan'),
+        ]
+        for path, expected in cases:
+            ok, msg = database.validate_sqlite_backup(path)
+            self.assertFalse(ok, f"{path} seharusnya ditolak")
+            self.assertIn(expected, msg.lower(), msg)
+
+        before = self.count('materials')
+        ok, msg = database.restore_from_sqlite(text)
+        self.assertFalse(ok)
+        self.assertEqual(self.count('materials'), before)
+        ok, msg = database.restore_from_sqlite(trigger)
+        self.assertFalse(ok)
+        self.assertIn('tidak diizinkan', msg.lower())
+
+    def test_06_json_tidak_valid_ditolak_dan_rollback(self):
+        ok, msg = database.restore_from_json({'format': 'x'})
+        self.assertFalse(ok)
+        self.assertIn("root 'data'", msg)
+
+        ok, msg = database.restore_from_json(
+            {'data': {'projects': [], 'suppliers': []}}
+        )
+        self.assertFalse(ok)
+        self.assertIn('materials', msg)
+
+        ok, msg = database.restore_from_json({'data': {}}, mode='ngawur')
+        self.assertFalse(ok)
+        self.assertIn('Mode impor', msg)
+
+        # Referensi yatim harus membatalkan seluruh impor (rollback).
+        payload = database.backup_to_json()
+        broken = json.loads(json.dumps(payload))
+        broken['data']['transactions'].append({
+            'id': 999999,
+            'transaction_number': 'SJ-99999999-999',
+            'type': 'OUT',
+            'project_id': 999999,
+            'project_name': 'Proyek Hantu',
+            'total_items': 0,
+            'total_qty': 0,
+            'total_amount': 0,
+            'status': 'Selesai',
+        })
+        before = {t: self.count(t) for t in ['materials', 'projects',
+                                             'transactions',
+                                             'transaction_items']}
+        original_stock = self.stock_of('BES-001')
+        ok, msg = database.restore_from_json(broken, mode='replace')
+        self.assertFalse(ok)
+        self.assertIn('tidak konsisten', msg.lower())
+        after = {t: self.count(t) for t in before}
+        self.assertEqual(after, before)
+        self.assertEqual(self.stock_of('BES-001'), original_stock)
+        self.assert_fk_clean()
+
+    def test_07_json_merge_idempoten_dan_barcode_bentrok(self):
+        payload = database.backup_to_json()
+        before = {t: self.count(t) for t in ['materials', 'projects',
+                                             'suppliers', 'transactions',
+                                             'transaction_items']}
+
+        ok, msg = database.restore_from_json(payload, mode='merge')
+        self.assertTrue(ok, msg)
+        self.assertEqual({t: self.count(t) for t in before}, before)
+
+        # Impor ulang tidak boleh menggandakan item transaksi.
+        ok, msg = database.restore_from_json(payload, mode='merge')
+        self.assertTrue(ok, msg)
+        self.assertEqual({t: self.count(t) for t in before}, before)
+        self.assert_fk_clean()
+
+        # Material baru dengan barcode milik material lain -> disimpan tanpa barcode.
+        conn = database.get_db()
+        try:
+            barcode = conn.execute(
+                "SELECT barcode FROM materials WHERE barcode IS NOT NULL LIMIT 1"
+            ).fetchone()['barcode']
+        finally:
+            conn.close()
+        merged = json.loads(json.dumps(payload))
+        merged['data']['materials'].append({
+            'sku': 'TST-MRG-01',
+            'barcode': barcode,
+            'name': 'Material Merge Uji',
+            'category': 'Alat & K3 Sipil',
+            'unit': 'Pcs',
+            'stock': 1,
+            'min_stock': 0,
+            'unit_price': 1000,
+        })
+        ok, msg = database.restore_from_json(merged, mode='merge')
+        self.assertTrue(ok, msg)
+
+        conn = database.get_db()
+        try:
+            row = conn.execute(
+                "SELECT barcode FROM materials WHERE sku = 'TST-MRG-01'"
+            ).fetchone()
+            self.assertIsNotNone(row)
+            self.assertIsNone(row['barcode'])
+            conn.execute("DELETE FROM materials WHERE sku = 'TST-MRG-01'")
+            conn.commit()
+        finally:
+            conn.close()
+
+    def test_08_endpoint_backup_admin(self):
+        self.login()
+        res = self.client.get('/backup')
+        self.assertEqual(res.status_code, 200)
+        self.assertIn('Backup', res.data.decode('utf-8'))
+
+        res = self.client.post('/backup/create',
+                               data={'csrf_token': self.csrf()},
+                               follow_redirects=True)
+        self.assertIn('Snapshot database berhasil', res.data.decode('utf-8'))
+        backups = database.list_local_backups()
+        self.assertTrue(backups)
+
+        res = self.client.get('/backup/download/db')
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.mimetype, 'application/x-sqlite3')
+        self.assertTrue(res.data.startswith(b'SQLite format 3\x00'))
+        res.close()
+
+        res = self.client.get('/backup/download/json')
+        self.assertEqual(res.status_code, 200)
+        payload = json.loads(res.data.decode('utf-8'))
+        self.assertEqual(payload['format'], 'alcivil_json_backup')
+        res.close()
+
+        filename = database.list_local_backups()[0]['filename']
+        res = self.client.get(f'/backup/download/file/{filename}')
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(res.data.startswith(b'SQLite format 3\x00')
+                        or res.data.startswith(b'{'))
+        res.close()
+
+        # Path traversal & ekstensi asing harus ditolak.
+        self.assertIsNone(alcivil_app._safe_backup_path('../../alcivil.db'))
+        self.assertIsNone(alcivil_app._safe_backup_path('evil.txt'))
+        res = self.client.get('/backup/download/file/tidak_ada.db',
+                              follow_redirects=False)
+        self.assertEqual(res.status_code, 302)
+
+        res = self.client.post(f'/backup/delete/{filename}',
+                               data={'csrf_token': self.csrf()},
+                               follow_redirects=True)
+        self.assertIn('telah dihapus', res.data.decode('utf-8'))
+        self.assertFalse(
+            os.path.exists(os.path.join(database.BACKUP_DIR, filename))
+        )
+
+    def test_09_endpoint_import_json_dan_db(self):
+        self.login()
+        payload = database.backup_to_json()
+        original_stock = self.stock_of('BES-001')
+        self.mutate()
+
+        res = self.client.post(
+            '/backup/import',
+            data={
+                'csrf_token': self.csrf(),
+                'import_mode': 'replace',
+                'backup_file': (BytesIO(json.dumps(payload).encode('utf-8')),
+                                'backup.json'),
+            },
+            content_type='multipart/form-data',
+            follow_redirects=True,
+        )
+        self.assertIn('berhasil diimpor', res.data.decode('utf-8'))
+        self.assertEqual(self.stock_of('BES-001'), original_stock)
+        self.assertIsNone(self.stock_of('TST-MUT-01'))
+
+        _, snapshot_path = database.backup_to_sqlite()
+        original_stock_2 = self.stock_of('BES-002')
+        self.mutate()
+        with open(snapshot_path, 'rb') as f:
+            db_bytes = f.read()
+        res = self.client.post(
+            '/backup/import',
+            data={
+                'csrf_token': self.csrf(),
+                'import_mode': 'replace',
+                'backup_file': (BytesIO(db_bytes), 'backup.db'),
+            },
+            content_type='multipart/form-data',
+            follow_redirects=True,
+        )
+        self.assertIn('berhasil dipulihkan dari database',
+                      res.data.decode('utf-8'))
+        self.assertEqual(self.stock_of('BES-002'), original_stock_2)
+
+        # Ekstensi tidak didukung.
+        res = self.client.post(
+            '/backup/import',
+            data={
+                'csrf_token': self.csrf(),
+                'backup_file': (BytesIO(b'catatan'), 'catatan.txt'),
+            },
+            content_type='multipart/form-data',
+            follow_redirects=True,
+        )
+        self.assertIn('Format file tidak didukung', res.data.decode('utf-8'))
+
+        # JSON rusak.
+        res = self.client.post(
+            '/backup/import',
+            data={
+                'csrf_token': self.csrf(),
+                'backup_file': (BytesIO(b'{bukan json'), 'rusak.json'),
+            },
+            content_type='multipart/form-data',
+            follow_redirects=True,
+        )
+        self.assertIn('bukan format JSON', res.data.decode('utf-8'))
+
+        # File .db yang bukan SQLite.
+        res = self.client.post(
+            '/backup/import',
+            data={
+                'csrf_token': self.csrf(),
+                'backup_file': (BytesIO(b'bukan database'), 'rusak.db'),
+            },
+            content_type='multipart/form-data',
+            follow_redirects=True,
+        )
+        self.assertIn('Gagal memulihkan database',
+                      res.data.decode('utf-8'))
+
+    def test_10_restore_lokal_dan_batas_role(self):
+        self.login()
+        _, snapshot_path = database.backup_to_sqlite()
+        filename = os.path.basename(snapshot_path)
+        original_stock = self.stock_of('SMN-001')
+        self.mutate()
+
+        res = self.client.post(f'/backup/restore/{filename}',
+                               data={'csrf_token': self.csrf()},
+                               follow_redirects=True)
+        self.assertIn('Berhasil memulihkan sistem',
+                      res.data.decode('utf-8'))
+        self.assertEqual(self.stock_of('SMN-001'), original_stock)
+        self.assertIsNone(self.stock_of('TST-MUT-01'))
+
+        res = self.client.post('/backup/restore/tidak_ada.db',
+                               data={'csrf_token': self.csrf()},
+                               follow_redirects=True)
+        self.assertIn('tidak ditemukan', res.data.decode('utf-8'))
+
+        # Operator tidak boleh mengakses fitur backup/migrasi.
+        if not database.get_user_by_username('operator_backup'):
+            database.create_user('operator_backup', 'OperatorBackup2026!',
+                                 role='operator',
+                                 display_name='Operator Backup')
+        self.login('operator_backup', 'OperatorBackup2026!')
+        self.assertEqual(self.client.get('/backup').status_code, 403)
+        res = self.client.post('/backup/create',
+                               data={'csrf_token': self.csrf()})
+        self.assertEqual(res.status_code, 403)
+
 
 if __name__ == '__main__':
     unittest.main()

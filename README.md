@@ -198,12 +198,34 @@ Salin `.env.example` menjadi `.env` lalu sesuaikan bila perlu:
 
 ---
 
+## 🧪 Menjalankan Tes Otomatis
+
+```bash
+python3 -m unittest test_alcivil -v
+```
+
+Saat ini ada **23 tes** yang mencakup autentikasi, CSRF, pembatasan role,
+transaksi & stok, serta **backup/restore SQLite dan JSON**:
+
+- snapshot SQLite valid & konsisten,
+- ekspor JSON lengkap tanpa membocorkan hash password,
+- restore `replace` dan `merge` (idempoten, relasi transaksi tetap utuh),
+- penolakan file rusak, trigger berbahaya, dan referensi yatim + rollback,
+- pembuatan snapshot pengaman sebelum restore,
+- endpoint backup/unduh/upload/restore lokal/hapus beserta batas role.
+
+Tes memakai database dan folder `backups/` sementara, sehingga data produksi
+(`alcivil.db`) tidak tersentuh.
+
+---
+
 ## 🏛️ Struktur Berkas
 
 ```
 al-civil/
 ├── app.py                     # Server Flask & REST API
 ├── database.py                # Skema SQLite & seed data material sipil
+├── test_alcivil.py            # Tes otomatis (auth, transaksi, backup/restore)
 ├── requirements.txt           # Dependensi Python
 ├── start.sh                   # Script peluncur otomatis (Termux)
 ├── .env.example               # Contoh konfigurasi environment

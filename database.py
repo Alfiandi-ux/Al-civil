@@ -533,6 +533,7 @@ def get_database_stats():
         stats['file_size_bytes'] = size
         stats['file_size_formatted'] = format_file_size(size)
 
+    conn = None
     try:
         conn = get_db()
         cursor = conn.cursor()
@@ -561,10 +562,14 @@ def get_database_stats():
         last_tx = cursor.fetchone()
         if last_tx:
             stats['last_transaction'] = f"{last_tx['transaction_number']} ({last_tx['created_at']})"
-
-        conn.close()
     except Exception as e:
         stats['error'] = str(e)
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
     return stats
 
@@ -576,34 +581,38 @@ def backup_to_sqlite(dest_path=None):
     else:
         filename = os.path.basename(dest_path)
 
-    # Flush WAL ke database utama
     src = get_db()
-    src.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-
-    dest = sqlite3.connect(dest_path)
-    with dest:
-        src.backup(dest, pages=100)
-    dest.close()
-    src.close()
+    dest = None
+    try:
+        # Flush WAL ke database utama
+        src.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        dest = sqlite3.connect(dest_path, timeout=10.0)
+        with dest:
+            src.backup(dest, pages=100)
+    finally:
+        if dest is not None:
+            dest.close()
+        src.close()
 
     return filename, dest_path
 
 def backup_to_json():
     """Mengekspor seluruh data tabel ke format JSON yang portabel."""
     conn = get_db()
-    cursor = conn.cursor()
+    try:
+        cursor = conn.cursor()
 
-    tables = ['materials', 'projects', 'suppliers', 'transactions', 'transaction_items', 'stock_adjustments']
-    data = {}
-    summary = {}
+        tables = ['materials', 'projects', 'suppliers', 'transactions', 'transaction_items', 'stock_adjustments']
+        data = {}
+        summary = {}
 
-    for table in tables:
-        cursor.execute(f"SELECT * FROM {table}")
-        rows = [dict(row) for row in cursor.fetchall()]
-        data[table] = rows
-        summary[table] = len(rows)
-
-    conn.close()
+        for table in tables:
+            cursor.execute(f"SELECT * FROM {table}")
+            rows = [dict(row) for row in cursor.fetchall()]
+            data[table] = rows
+            summary[table] = len(rows)
+    finally:
+        conn.close()
 
     payload = {
         'app': 'AL-CIVIL WMS',
@@ -625,6 +634,7 @@ def validate_sqlite_backup(file_path):
     if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
         return False, "File database tidak ditemukan atau kosong."
 
+    conn = None
     try:
         conn = sqlite3.connect(file_path, timeout=5.0)
         cursor = conn.cursor()
@@ -633,14 +643,12 @@ def validate_sqlite_backup(file_path):
         cursor.execute("PRAGMA quick_check")
         check_res = cursor.fetchone()
         if not check_res or str(check_res[0]).lower() != 'ok':
-            conn.close()
             return False, f"Pemeriksaan integritas SQLite gagal: {check_res[0] if check_res else 'Unknown'}"
 
         # Tolak trigger/view asing (indikasi file tidak sah / berbahaya)
         cursor.execute("SELECT name, type FROM sqlite_master WHERE type IN ('trigger', 'view')")
         unsafe = cursor.fetchall()
         if unsafe:
-            conn.close()
             names = ', '.join(f"{r[1]}: {r[0]}" for r in unsafe[:5])
             return False, f"File database mengandung objek yang tidak diizinkan ({names})."
 
@@ -650,7 +658,6 @@ def validate_sqlite_backup(file_path):
         required = ['materials', 'projects', 'suppliers', 'transactions', 'transaction_items']
         missing = [t for t in required if t not in tables]
         if missing:
-            conn.close()
             return False, f"File database tidak valid untuk AL-CIVIL (tabel hilang: {', '.join(missing)})."
 
         # Cek kolom kunci agar restore tidak menghasilkan skema setengah jadi.
@@ -666,16 +673,20 @@ def validate_sqlite_backup(file_path):
             existing = {row[1] for row in cursor.fetchall()}
             missing_cols = [c for c in cols if c not in existing]
             if missing_cols:
-                conn.close()
                 return False, (
                     f"Struktur tabel '{table}' tidak cocok "
                     f"(kolom hilang: {', '.join(missing_cols)})."
                 )
 
-        conn.close()
         return True, "Valid"
     except Exception as e:
         return False, f"File bukan database SQLite yang valid ({str(e)})."
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 def restore_from_sqlite(source_path):
     """Memulihkan seluruh database dari file SQLite eksternal dengan auto-rollback."""
@@ -699,11 +710,15 @@ def restore_from_sqlite(source_path):
 
         # Gunakan backup API untuk menulis ulang alcivil.db dari source_path
         src = sqlite3.connect(source_path, timeout=10.0)
-        dest = sqlite3.connect(DB_PATH, timeout=10.0)
-        with dest:
-            src.backup(dest)
-        src.close()
-        dest.close()
+        try:
+            dest = sqlite3.connect(DB_PATH, timeout=10.0)
+            try:
+                with dest:
+                    src.backup(dest)
+            finally:
+                dest.close()
+        finally:
+            src.close()
 
         # Inisialisasi PRAGMA & skema baru
         init_db()
