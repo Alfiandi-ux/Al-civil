@@ -199,6 +199,12 @@ public class MainActivity extends AppCompatActivity {
                     String fileName = URLUtil.guessFileName(url, contentDisposition, mimeType);
                     request.setMimeType(mimeType);
                     request.addRequestHeader("User-Agent", userAgent);
+                    // DownloadManager adalah HTTP client terpisah: tanpa cookie ini
+                    // server mengalihkan ke /login dan yang tersimpan justru HTML.
+                    String cookie = CookieManager.getInstance().getCookie(url);
+                    if (cookie != null && !cookie.isEmpty()) {
+                        request.addRequestHeader("Cookie", cookie);
+                    }
                     request.setTitle(fileName);
                     request.setDescription("Mengunduh dari AL-CIVIL WMS...");
                     request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);

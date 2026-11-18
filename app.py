@@ -1154,6 +1154,8 @@ def _detect_backup_kind(file, ext):
         return 'db'
     if head.startswith(b'{') or head.startswith(b'['):
         return 'json'
+    if head.startswith(b'<'):
+        return 'html'
 
     if ext in ('.db', '.sqlite', '.sqlite3'):
         return 'db'
@@ -1272,6 +1274,19 @@ def backup_import():
         flash(
             "⚠️ Format file tidak didukung! Gunakan file .db atau .json hasil "
             "backup AL-CIVIL (isi file tidak dikenali).",
+            "danger"
+        )
+        return redirect(url_for('backup_view'))
+
+    if kind == 'html':
+        app.logger.warning(
+            "Impor backup ditolak: nama=%r berisi HTML (kemungkinan halaman login)",
+            filename
+        )
+        flash(
+            "⚠️ File yang dipilih berisi halaman HTML/login, bukan data backup. "
+            "Unduh ulang backup dari menu Backup (pastikan masih login), lalu "
+            "impor file hasil unduhan yang baru.",
             "danger"
         )
         return redirect(url_for('backup_view'))

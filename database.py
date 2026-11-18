@@ -634,6 +634,31 @@ def validate_sqlite_backup(file_path):
     if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
         return False, "File database tidak ditemukan atau kosong."
 
+    # Periksa header lebih dulu agar pesan galat bisa menjelaskan penyebabnya
+    # (mis. file hasil unduhan ternyata halaman login HTML).
+    try:
+        with open(file_path, 'rb') as fh:
+            header = fh.read(16)
+    except Exception as e:
+        return False, f"File database tidak dapat dibaca ({str(e)})."
+
+    if not header.startswith(b'SQLite format 3\x00'):
+        stripped = header.lstrip()
+        if stripped.startswith(b'<'):
+            return False, (
+                "File bukan database SQLite (isinya halaman HTML/login). "
+                "Unduh ulang backup dari menu Backup setelah login."
+            )
+        if stripped.startswith(b'{') or stripped.startswith(b'['):
+            return False, (
+                "File berisi data JSON, bukan database SQLite. "
+                "Impor sebagai file .json."
+            )
+        return False, (
+            "File bukan database SQLite yang valid (header tidak dikenali, "
+            f"ukuran {os.path.getsize(file_path)} byte)."
+        )
+
     conn = None
     try:
         conn = sqlite3.connect(file_path, timeout=5.0)

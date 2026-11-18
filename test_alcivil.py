@@ -848,6 +848,42 @@ class BackupRestoreTests(unittest.TestCase):
         self.assertIn('Format file tidak didukung',
                       res.data.decode('utf-8'))
 
+    def test_12_unduhan_berisi_halaman_login_ditolak_jelas(self):
+        """Regresi: DownloadManager Android tanpa cookie menyimpan halaman login."""
+        self.login()
+        html_page = (b'<!DOCTYPE html><html><head><title>Login</title></head>'
+                     b'<body><form>Masuk ke Sistem</form></body></html>')
+
+        for name in ('AL-CIVIL_Database.db', 'AL-CIVIL_Backup.json'):
+            with self.subTest(name=name):
+                res = self.client.post(
+                    '/backup/import',
+                    data={
+                        'csrf_token': self.csrf(),
+                        'backup_file': (BytesIO(html_page), name),
+                    },
+                    content_type='multipart/form-data',
+                    follow_redirects=True,
+                )
+                self.assertIn('halaman HTML', res.data.decode('utf-8'))
+
+        # Validator level database juga harus menjelaskan penyebabnya.
+        html_path = os.path.join(self.tmpdir, 'login_page.db')
+        with open(html_path, 'wb') as f:
+            f.write(html_page)
+        ok, msg = database.validate_sqlite_backup(html_path)
+        self.assertFalse(ok)
+        self.assertIn('HTML/login', msg)
+
+        # Tanpa sesi, endpoint unduh memang mengembalikan halaman login (HTML),
+        # bukan file SQLite — inilah yang dulu tersimpan oleh DownloadManager.
+        with self.client.session_transaction() as sess:
+            sess.clear()
+        res = self.client.get('/backup/download/db', follow_redirects=True)
+        self.assertEqual(res.status_code, 200)
+        self.assertIn(b'Masuk ke Sistem', res.data)
+        self.assertFalse(res.data.startswith(b'SQLite format 3\x00'))
+
 
 if __name__ == '__main__':
     unittest.main()
